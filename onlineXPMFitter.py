@@ -185,7 +185,7 @@ class grafit(tk.Frame):
             dataToFile[4] = str(cat)
             dataToFile[5] = str(an)
             dataToFile[6] = str(offst)
-            dataToFile[7] = str( datetime.datetime.now().timestamp() + 126144000.0 + 2208988800.0 )
+            
             dataToFile[8] = str(0.0) #UV
             dataToFile[9] = str(0.0) #IR
             dataToFile[10] = str(result.chisqr/result.nfree) #reduced chisq
@@ -195,6 +195,8 @@ class grafit(tk.Frame):
             
 
             self.xar.append((time.time() - self.start_time) / 3600)
+	    ts = self.xar[-1]*3600.0 + self.start_time
+	    dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
             tau_e = (81.9 - 10.0) / np.log(cat / an)
             self.yar.append(tau_e)
 
