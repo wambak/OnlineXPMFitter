@@ -18,7 +18,7 @@ from scipy import integrate
 from scipy.special import erfc
 from uncertainties.core import wrap
 import sched
-import csv
+from datetime import datetime
 
 schedule = sched.scheduler(time.time, time.sleep)
 schedule_start_time = 0.0
@@ -269,6 +269,21 @@ class grafit(tk.Frame):
 
         self.ctr += 1
 
+        #Statistics labels Updates
+        self.eventNumLabel.insert(1.0,text=self.ctr+'\n')
+        self.lifetimeLabel.insert(1.0,text=(tau_e+'+'+(upper_bound-tau_e)+'-'+(tau_e-lower_bound)+'\n'))
+        self.cathodeLabel.insert(1.0,text=cat+'\n')
+        self.anodeLabel.insert(1.0,text=an+'\n')
+        self.tcLabel.insert(1.0,text='10\n')
+        self.tcriseLabel.insert(1.0,text='1\n')
+        self.taLabel.insert(1.0,text='81.9\n')
+        self.tariseLabel.insert(1.0,text='2.9\n')
+        self.offsetLabel.insert(1.0,text=offst+'\n')
+        
+        #Time Update
+        now = datetime.now()
+        self.currentTime.insert(1.0,tk.END, now.strftime('%H:%M:%S')+'\n')
+        
         # here we check if the save file has been defined, if so write to it, if not state that it is not set
         try:
             self.saveFile
@@ -283,17 +298,18 @@ class grafit(tk.Frame):
                 print('Save file has been closed')
         except :
             print('Save file is not set')
-
+        
     def ud(self) :
         try :
             #print('schedule length',len(schedule.queue))
             if len( schedule.queue ) > 0 :
                 ct = int((schedule.queue[0].time - time.time())*100)
                 #print(ct)
-            if len( schedule.queue[0].argument[0] ) > 1 and ct > 0 :
-                print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
-            if len( schedule.queue[0].argument[0] ) == 0 :
-                print('Busy...Downloading waveforms...')
+            if len( schedule.queue[0].argument[0] ) > 1 and ct > 0 :    
+                #print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
+                self.currentStatus.insert(1.0,schedule.queue[0].argument[0]+str(ct/100)+' sec\n')
+            #if len( schedule.queue[0].argument[0] ) == 0 :
+                #print('Busy...Downloading waveforms...')
         except Exception as exc:
             for event in schedule.queue :
                 schedule.cancel(event)
@@ -350,7 +366,7 @@ class grafit(tk.Frame):
             global total
             dwellclosed = 32.0
             dwellopen = float(self.waitT_input.get())
-            fibersavetime = 300.0 #for fibersave
+            fibersavetime = 10800.0 #for fibersave
             tbc = dwellclosed
             tf = 0 
             if len( schedule.queue ) == 0 or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) : 
@@ -501,22 +517,22 @@ class grafit(tk.Frame):
 	# seconds to wait between captures
         self.waitT_label = tk.Label(height=1, width=30)
         self.waitT_label.config(text="Seconds to wait between captures")
-        self.waitT_label.grid(row=1, column=1)
+        self.waitT_label.grid(row=18, column=1)
 
         # seconds to wait input
         defaultTime = tk.StringVar(self.parent)
         defaultTime.set('33.0')
         self.waitT_input = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', textvariable=defaultTime)
-        self.waitT_input.grid(row=4, column=1)
+        self.waitT_input.grid(row=19, column=1)
 
         # next two lines are for the texbox for entries
-        self.fileSaveInput = tk.Text( height=1, width=30, bg='gray') # text box( where user enters path)
+        self.fileSaveInput = tk.Text( height=1, width=24, bg='gray') # text box( where user enters path)
         self.fileSaveInput.insert(tk.END,'testData')
-        self.fileSaveInput.grid( row=3, column=1)
+        self.fileSaveInput.grid( row=24, column=1)
 
         # button to commit the save path ( technically starts before)
         self.commitLocationButton = tk.Button(text="Start", command=lambda:self.set_saveFile())
-        self.commitLocationButton.grid(row=3, column=2)
+        self.commitLocationButton.grid(row=24, column=2)
 
         # positioning of the graphs
         self.figure1 = Figure(figsize=(4, 4), dpi=100)
@@ -532,8 +548,93 @@ class grafit(tk.Frame):
         self.plot_widget1 = self.canvas1.get_tk_widget()
         self.plot_widget2 = self.canvas2.get_tk_widget()
 
-        self.plot_widget1.grid(row=1, column=5)
-        self.plot_widget2.grid(row=1, column=6)
+        self.plot_widget1.grid(row=1, rowspan=64, column=5, columnspan=8)
+        self.plot_widget2.grid(row=1, rowspan=64, column=14, columnspan=8)
+        
+        self.currentStatus = tk.Text(height=1, width=78, bg='white',fg='#CF9FFF')  # current status is displayed
+        self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
+        self.currentStatus.grid( row=65, column=16, columnspan=10)
+        
+        now = datetime.now()
+        self.currentTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3')  # current time / time the interface was launched
+        self.currentTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.currentTime.grid( row=69, column=7, columnspan=2)
+        
+        self.timeLabel2 = tk.Label(height=1, width=12)
+        self.timeLabel2.config(text="Current Time")
+        self.timeLabel2.grid(row=68, column=7,columnspan=2)
+        
+        self.timeLabel1 = tk.Label(height=1, width=12)
+        self.timeLabel1.config(text="Start Time")
+        self.timeLabel1.grid(row=68, column=5, columnspan=2)
+        
+        self.startTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3')  # code start time
+        self.startTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.startTime.grid( row=69, column=5, columnspan=2)
+        
+        #Stats Info Display
+        self.eventNumName = tk.Label(height=1, width=6)
+        self.eventNumName.config(text='Event# ')
+        self.eventNumName.grid(row=65, column=5)
+        self.eventNumLabel = tk.Text(height=1, width=8) 
+        self.eventNumLabel.insert(1.0,str(0))
+        self.eventNumLabel.grid(row=65, column=6)
+        
+        self.lifetimeName = tk.Label(height=1, width=6)
+        self.lifetimeName.config(text='Lifetime ')
+        self.lifetimeName.grid(row=65, column=7)
+        self.lifetimeLabel = tk.Text(height=1, width=8) 
+        self.lifetimeLabel.insert(1.0,'0.00')
+        self.lifetimeLabel.grid(row=65, column=8)
+        
+        self.cathodeName = tk.Label(height=1, width=6)
+        self.cathodeName.config(text='Cathode ')
+        self.cathodeName.grid(row=65, column=9)
+        self.cathodeLabel = tk.Text(height=1, width=8) 
+        self.cathodeLabel.insert(1.0,'0.00')
+        self.cathodeLabel.grid(row=65, column=10)
+        
+        self.anodeName = tk.Label(height=1, width=6)
+        self.anodeName.config(text='Anode ')
+        self.anodeName.grid(row=66, column=5)
+        self.anodeLabel = tk.Text(height=1, width=8) 
+        self.anodeLabel.insert(1.0,'0.00')
+        self.anodeLabel.grid(row=66, column=6)
+        
+        self.tcName = tk.Label(height=1, width=6)
+        self.tcName.config(text='Tc  ')
+        self.tcName.grid(row=66, column=7)
+        self.tcLabel = tk.Text(height=1, width=8) 
+        self.tcLabel.insert(1.0,'0.00')
+        self.tcLabel.grid(row=66, column=8)
+        
+        self.tcriseName = tk.Label(height=1, width=6)
+        self.tcriseName.config(text='Tcise  ')
+        self.tcriseName.grid(row=66, column=9)
+        self.tcriseLabel = tk.Text(height=1, width=8) 
+        self.tcriseLabel.insert(1.0,'0.00')
+        self.tcriseLabel.grid(row=66, column=10)
+        
+        self.taName = tk.Label(height=1, width=6)
+        self.taName.config(text='Ta  ')
+        self.taName.grid(row=67, column=5)
+        self.taLabel = tk.Text(height=1, width=8) 
+        self.taLabel.insert(1.0,'0.00')
+        self.taLabel.grid(row=67, column=6)
+        
+        self.tariseName = tk.Label(height=1, width=6)
+        self.tariseName.config(text='Tarise  ')
+        self.tariseName.grid(row=67, column=7)
+        self.tariseLabel = tk.Text(height=1, width=8) 
+        self.tariseLabel.insert(1.0,'0.00')
+        self.tariseLabel.grid(row=67, column=8)
+        
+        self.offsetName = tk.Label(height=1, width=6)
+        self.offsetName.config(text='Offset  ')
+        self.offsetName.grid(row=67, column=9)
+        self.offsetLabel = tk.Text(height=1, width=8) 
+        self.offsetLabel.insert(1.0,'0.00')
+        self.offsetLabel.grid(row=67, column=10)
 
         # self.fig.canvas.draw()
 
