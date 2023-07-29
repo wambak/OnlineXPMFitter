@@ -25,20 +25,19 @@ from WF_SDK import device, scope, wavegen
 try:
   device_data = device.open()     #if the AD2 is connected
   is_connected = True
-  print('AD2 connected\n')
-except:     # if it isn't open, we want to ignore the code that handles it. i would make this nicer if i could find the wf_sdk docs
+  print('AD2 connected')
+except:     # if it isn't, we want to ignore the code that handles it. i would make this nicer if i could find the wf_sdk docs
   is_connected = False
-  print('AD2 not found\n')
-  pass 
+  print('AD2 not found')
 
-
-schedule = sched.scheduler(time.time, time.sleep)   # is generating a 0-element array
+schedule = sched.scheduler(time.time, time.sleep) 
 schedule_start_time = 0.0
 eventList = []
 time0 = []
 volt0 = []
 isfibersave = True
 total = 0.0
+energized = False   # SHOULD start as OFF by default
 
 def startSchedule():
     #print('running schedule')
@@ -47,27 +46,33 @@ def startSchedule():
     return
 
 def closeshutter(text,dwell) :  #energizing
+  global energized
   try:
     (WindowsPath.home() / '.shutterclosed').touch()     #creates a temporary file "shutterclosed"
   except:
     Path('/tmp/.shutterclosed').touch() # for non-Windows machines
   #print('closed it')
-  
-  if is_connected: # if AD2 was connected. if not, just ignore the rest of this func
-    print('Energizing')
-    listoftimes = [0.25, 0.1]   # hardcoding the trial-and-error values from shutterGUI.py
-	# code for energizing - adapted from shutterGUI.py
-    #energized = True
-    for index in range(0, len(listoftimes), 2):
-        wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=4.98, frequency=1e02,
-	      amplitude=0.02)
-        time.sleep(listoftimes[index])
-        wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=0.02, frequency=1e02,
-	      amplitude=0.02)
-        time.sleep(listoftimes[index + 1])
+  if not energized: 
+      print('Energizing')
+      
+      if is_connected: # if AD2 was connected, and the shutter is open. if not, just ignore this block
+        listoftimes = [0.25, 0.25]   # hardcoding the trial-and-error values from shutterGUI.py
+        # code for energizing - adapted from shutterGUI.py
+        for index in range(0, len(listoftimes), 2):
+            wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=4.98, frequency=1e02,
+              amplitude=0.02) # on
+            time.sleep(listoftimes[index])
+            wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=0.02, frequency=1e02,
+              amplitude=0.02) # we briefly pulse the AD2 back off to make the spring engage/de-engage smoother 
+            time.sleep(listoftimes[index + 1])
+            wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=4.98, frequency=1e02,
+              amplitude=0.02) # on for good this time
+            time.sleep(listoftimes[index])
+      energized = True # this happens regardless of connection
   return
 
 def openshutter(text,dwell) :   #deenergizing
+  global energized
   try:
     pathExists = (WindowsPath.home() / '.shutterclosed').exists()       #deletes temp file
     if pathExists == True:
@@ -78,18 +83,67 @@ def openshutter(text,dwell) :   #deenergizing
       Path('/tmp/.shutterclosed').unlink()
 
       # deenergizing - adapted from shutterGUI.py
-  if is_connected:
-    print('De-energizing')
-    listoftimes = [0.25, 0.4] 
-    for index in range(0, len(listoftimes), 2):
-      wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=0.02, frequency=1e02,
-        amplitude=0.02)
-      time.sleep(listoftimes[index])
-      wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=4.98, frequency=1e02,
-        amplitude=0.02)
-      time.sleep(listoftimes[index + 1])
+  if energized:
+      print('De-energizing')
+      if is_connected: # if AD2 is connected and the shutter is closed
+        listoftimes = [0.4, 0.1] 
+        for index in range(0, len(listoftimes), 2):
+          wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=0.02, frequency=1e02,
+            amplitude=0.02) # off
+          time.sleep(listoftimes[index])
+          wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=4.98, frequency=1e02,
+            amplitude=0.02) # we briefly pulse the AD2 back on to make the spring engage/de-engage smoother 
+          time.sleep(listoftimes[index + 1])
+          wavegen.generate(device_data, channel=2, function=wavegen.function.sine, offset=0.02, frequency=1e02,
+            amplitude=0.02) # off for good this time
+          time.sleep(listoftimes[index])
+      energized=False
   return
 
+
+class append_Box(tk.simpledialog.Dialog):
+    """Dialog box that pops up when starting program with a filepath that already exists. 
+    Options to append data, overwrite data, or back out and start over with a different path. 
+    Returns string appendMode via appendBox(): 'append', 'overwrite', or 'cancel' """
+
+    def body(self, frame): 
+        self.text = tk.Label(frame, width=30, text="File exists!")
+        self.text.grid(row=0, padx=5)
+
+        return self.text
+
+    def buttonbox(self):
+        box = tk.Frame(self)
+
+        append_b = tk.Button(box, text = 'Append', width=5, command = self.appendMode)
+        append_b.pack(side='left', ipadx=10, padx=5, pady=5)
+        overwrite_b = tk.Button(box, text='Overwrite', width=5, command = self.overwriteMode)
+        overwrite_b.pack(side='left', ipadx=10, padx=5, pady=5)
+        cancel_b = tk.Button(box, text='Cancel', width=5, command = self.cancel)
+        cancel_b.pack(side='left', ipadx=10, padx=5, pady=5)
+
+        self.bind('<Escape>', lambda x:self.cancel()) # x is only here to catch the escape key parameter 
+                                                    #and stop the program trying to pass it to self.cancel()
+        box.pack()
+
+    def appendMode(self):
+        self.mode = 'append'
+        self.destroy()
+
+    def overwriteMode(self):
+        self.mode = 'overwrite'
+        self.destroy()
+
+    def cancel(self):
+        self.mode = 'cancel'
+        self.destroy()
+
+
+
+def appendBox(parent):
+    # Function to interact with append_Box. 
+    appendBox = append_Box(parent, title="File I/O")
+    return appendBox.mode
 
 class grafit(tk.Frame):
     def updateShutter(self, shutterState):
@@ -145,7 +199,6 @@ class grafit(tk.Frame):
         return
 
     def plotit(self,  text='' , dwell=0.0 , islaser=False ):
-        #should we still be using the sim if the ad2 is connected? 
         if islaser : #FIXME: the laser traces shouldn't just be getting ignored
           return
         data = ''
@@ -215,7 +268,6 @@ class grafit(tk.Frame):
             catrow = (ci_txt.split('\n')[1].split(':')[1])
             anrow = (ci_txt.split('\n')[2].split(':')[1])
             #offstrow = (ci_txt.split('\n')[3].split(':')[1]) #this is causing an error and i don't think the data itself is actually used for anything?
-            offstrow = '\n' # spacer
             cat = b['cat']
             an = b['an']
             offst = b['offst'] 
@@ -242,7 +294,7 @@ class grafit(tk.Frame):
             dataToFile[12] = float(0.0)
 
             self.xar.append((time.time() - self.start_time) / 3600)
-            ts = self.xar[-1]*3600.0 + self.start_time
+            ts = self.xar[-1]*3600.0 + self.start_time  
             dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
             tau_e = (81.9 - 10.0) / np.log(cat / an)
             print('cat and an', cat, an, offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
@@ -257,7 +309,7 @@ class grafit(tk.Frame):
             dataToFile[15] = float(an_ll)
             dataToFile[16] = float(an_ul)
 
-            fh = open(self.savePath, 'a')
+            fh = open(self.savePath, 'a') 
 
             writer = csv.writer(fh)
             writer.writerows([dataToFile])
@@ -293,7 +345,7 @@ class grafit(tk.Frame):
                 #               self.wavmodel.eval(x=tfine, an=b['an'], cat=b['cat'], cent_c=b['cent_c'], tcrise=b['tcrise'],
                 #               tarise=b['tarise'], cent_a=b['cent_a'], gam_a=b['gam_a'],
                 #               gam_c=b['gam_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='proposed: an=42.04 mV')
-                self.plt1.plot(tfine, # i think this is where it's getting hung up?
+                self.plt1.plot(tfine, 
                                self.wavmodel.eval(x=tfine, cat=cat, an=an, sig_c=b['sig_c'], gam_c=b['gam_c'], 
                                sig_a=b['sig_a'], skew_c=b['skew_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='new voigt')
 
@@ -334,8 +386,8 @@ class grafit(tk.Frame):
                 print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
             if len( schedule.queue[0].argument[0] ) == 0 :
                 print('Busy...Downloading waveforms...')
-        except Exception as exc: # ???
-            print(exc)
+        except Exception as exc: # this is what's causing it to repeat that error forever before the program starts
+            #print(exc)
             for event in schedule.queue :
                 schedule.cancel(event)
             self.saveFile.close()
@@ -346,6 +398,7 @@ class grafit(tk.Frame):
     def on_closing(self):
         for event in schedule.queue :
             schedule.cancel(event)
+        print("File closed")
         self.saveFile.close()
         openshutter('',0.0)
         #os._exit(0)
@@ -394,11 +447,13 @@ class grafit(tk.Frame):
         sqrt2 = np.sqrt(2.0)
         sqrt2pi = np.sqrt(2.0*np.pi)
         thold = 395.3 
-        z_a = (x - ta + sig_a*1j)/(sig_a*sqrt2) 
-        realw_a = an*np.real(wofz(z_a))/(sqrt2pi*sig_a) 
+        # anode
+        z_a = (x - ta + sig_a*1j)/(sig_a*sqrt2) # first part of the Voigt dist
+        realw_a = an*np.real(wofz(z_a))/(sqrt2pi*sig_a) # real component of a Faddeeva func of A 
         i_a = (realw_a)*(2.0/(1.0+np.exp((ta-x)/skew_a))) # multiply everything by the Fermi function before putting it into the integral
         anode = -(1.0/CF)*np.exp(-(x-ta)/thold)*integrate.cumulative_trapezoid( np.exp((x-ta)/thold)*i_a, x, initial=0.0)
 
+        # cathode - this is just the anode code again 
         z_c = (x - tc + gam_c*1j)/(sig_c*sqrt2)
         realw_c = -cat*np.real(wofz(z_c))/(sqrt2pi*sig_c)
         i_c = (realw_c)*(2.0/(1.0+np.exp((tc-x)/skew_c)))
@@ -407,6 +462,7 @@ class grafit(tk.Frame):
         return cathode + anode + offst
 
     def control(self):
+        #print("Starting self.control...")
         try :
             global total
             dwellclosed = 32.0 ### 32.0
@@ -421,7 +477,7 @@ class grafit(tk.Frame):
                     #print(text)
                     if isfibersave and root.graph.ctr > 0 and iii == 0 : 
                         text = '*Fiber-saving mode: ---SHUTTER CLOSED--- resume in '
-                    schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
+                    schedule.enter( total, 1, closeshutter, argument=(text,1.0) ) 
                     text = '*Acquisition mode ---SHUTTER CLOSED--- capture background trace in '
                     #if isfibersave and root.graph.ctr > 0 :
                     #  text = '*Fiber-saving mode: ---SHUTTER CLOSED--- next acquisition in '
@@ -445,7 +501,7 @@ class grafit(tk.Frame):
                         total = total + 1 
                         schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
                         total = total + fibersavetime
-                    else :
+                    else : 
                         total = total + 1 
                         text = '*Acquisition mode ---CLOSING SHUTTER--- preparing next acquisition '
                         schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
@@ -459,25 +515,77 @@ class grafit(tk.Frame):
                 schedule.cancel(event)
             self.saveFile.close()
             #os._exit(0)
-        self.parent.after(10, self.control)
+        self.parent.after(10, self.control) 
 
     def set_saveFile(self):
-        self.control()    
-        def close_saveFile():
-            print('File closed')
-            saveFile.close()
 
-        self.savePath=self.fileSaveInput.get('1.0', 'end-1c')
-        self.currSavePath = tk.Label(height=1, width=30)
-        self.currSavePath.config(text="File Path: " + self.savePath)
-        self.currSavePath.grid(row=2, column=1)
+      """def close_saveFile():
+          #print('File closed')
+          self.saveFile.close()"""
 
-        # the file that the info will be saved to( open appropriate one when path is specified) 
-        self.saveFile = open(r'%s' % (self.savePath), "a")
-        #saveFile.write("Hello saveFile\n")
+      self.savePath=self.fileSaveInput.get('1.0', 'end-1c')
+      self.currSavePath = tk.Label(height=1, width=30)
+      self.currSavePath.config(text="File Path: " + self.savePath)
+      self.currSavePath.grid(row=2, column=1)
+
+      if total: # stops the program from trying to start if it's already running
+          tk.messagebox.showerror(title="Error", message='Program is already running!')
+          return
+
+      if os.path.isfile(self.savePath): # if file exists, check for start mode 
+        state = appendBox(self.parent)
+ 
+        if state == 'append':
+            self.control() 
+
+            print("Opening in append mode")
+            self.saveFile = open(r'%s' % (self.savePath), "r+")  # opens in append-and-read mode 
+            count = 0
+            newtime = 0
+            while True: # read existing data to graph 
+              count += 1
+              line = self.saveFile.readline()
+              if line == '\n': # skips the blank lines
+                continue
+              elif line == '':  # for eof
+                break
+              else: # lines with data
+                line.strip()
+                linearr = line.split(',')
+                linearr = [float(i) for i in linearr]
+                    # line[4], line[5] are cat, an 
+                    # line[7] is ts (time (seconds)) 
+                    # line[13] - line[16] are cat_ll, cat_ul, an_ll, an_ul
+                if count == 1:
+                    newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data
+                ts = linearr[7] - (126144000.0 + 2208988800.0)
+                self.xar.append( (ts - newtime) / 3600)
+                tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
+                self.yar.append(tau_e)
+                upper_bound = -(81.9 - 10.0) / np.log(linearr[16] / linearr[13])
+                lower_bound = -(81.9 - 10.0) / np.log(linearr[15] / linearr[14])
+                self.el.append(tau_e - lower_bound)
+                self.eh.append(upper_bound - tau_e)
+            self.start_time = newtime # extending the time so graph renders correctly 
+            
+            self.scheduThread.start()
+        if state == 'overwrite':
+            self.control() 
+
+            print("Opening in overwrite mode")
+            self.saveFile = open(r'%s' % (self.savePath), "w+")  # deletes and overwrites old data
+            self.scheduThread.start()
+        else:
+            # cancel. go back to the start screen to enter a new file and try again
+            return
+        
+      else:  
+        # if file does not already exist
+        self.control() 
+        print("Creating file")
+        self.saveFile = open(r'%s' % (self.savePath), "w+") 
         self.scheduThread.start()
 
-        
 
     def __init__(self, parent):
         self.ctr = 0
@@ -504,7 +612,6 @@ class grafit(tk.Frame):
         self.isStandard = False
         self.scheduThread = threading.Thread(target=startSchedule)
         self.scheduThread.daemon = True
-
 
         if self.isStandard :
           self.p_i = [49.98262, 46.10659, 10.0, 1.0, 2.9, 81.9, 395.3, 0.8, 0.9, 43.619015]
