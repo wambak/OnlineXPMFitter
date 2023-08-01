@@ -356,25 +356,45 @@ class grafit(tk.Frame):
             self.canvas1.draw_idle()
             self.canvas2.draw_idle()
 
+            #Statistics labels Updates 
+            # optional TODO: if anyone ever updates these fields with that wrapper, do it with these functions too
+            self.eventNumLabel.config(state='normal') # disabled makes it read only but also stops us from editing, so we need to 
+                                                    # switch back to update the display. 
+            self.eventNumLabel.delete(1.0, tk.END)  # clear row before inserting
+            self.eventNumLabel.insert(1.0,str(self.ctr))
+            self.eventNumLabel.config(state='disabled')
+
+            self.lifetimeLabel.config(state='normal')
+            self.lifetimeLabel.delete(1.0, tk.END)
+            self.lifetimeLabel.insert(1.0,(str(tau_e)+'+'+str(upper_bound-tau_e)+'-'+str(tau_e-lower_bound)))
+            self.lifetimeLabel.config(state='disabled')
+
+            self.cathodeLabel.config(state='normal')
+            self.cathodeLabel.delete(1.0, tk.END)
+            self.cathodeLabel.insert(1.0,str(cat))
+            self.cathodeLabel.config(state='disabled')
+
+            self.anodeLabel.config(state='normal')
+            self.anodeLabel.delete(1.0, tk.END)
+            self.anodeLabel.insert(1.0,str(an))
+            self.anodeLabel.config(state='disabled')
+
+            self.offsetLabel.config(state='normal')
+            self.offsetLabel.delete(1.0, tk.END)
+            self.offsetLabel.insert(1.0,str(offst))
+            self.offsetLabel.config(state='disabled')
+            """
+            #Time Update
+            now = datetime.now()
+            self.currentTime.config(state='normal')
+            self.currentTime.delete(1.0, tk.END)
+            self.currentTime.insert(1.0,now.strftime('%H:%M:%S'))
+            self.currentTime.config(state='disabled')"""
+
         else:
             self.nontopHat = np.array(wfm)
 
         self.ctr += 1
-
-        #Statistics labels Updates
-        self.eventNumLabel.insert(1.0,text=self.ctr+'\n')
-        self.lifetimeLabel.insert(1.0,text=(tau_e+'+'+(upper_bound-tau_e)+'-'+(tau_e-lower_bound)+'\n'))
-        self.cathodeLabel.insert(1.0,text=cat+'\n')
-        self.anodeLabel.insert(1.0,text=an+'\n')
-        self.tcLabel.insert(1.0,text='10\n')
-        self.tcriseLabel.insert(1.0,text='1\n')
-        self.taLabel.insert(1.0,text='81.9\n')
-        self.tariseLabel.insert(1.0,text='2.9\n')
-        self.offsetLabel.insert(1.0,text=offst+'\n')
-        
-        #Time Update
-        now = datetime.now()
-        self.currentTime.insert(1.0,tk.END, now.strftime('%H:%M:%S')+'\n')
         
         # here we check if the save file has been defined, if so write to it, if not state that it is not set
         try:
@@ -399,7 +419,18 @@ class grafit(tk.Frame):
                 #print(ct)
             if len( schedule.queue[0].argument[0] ) > 1 and ct > 0 :    
                 #print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
-                self.currentStatus.insert(1.0,schedule.queue[0].argument[0]+str(ct/100)+' sec\n')
+                # Current State update, works exactly identical to the rest of the label updates in plotit()
+                self.currentStatus.config(state='normal')
+                self.currentStatus.delete(1.0,tk.END)
+                self.currentStatus.insert(1.0,schedule.queue[0].argument[0]+str(ct/100)+' sec')
+                self.currentStatus.config(state='disabled')
+                
+                #Time Update
+                now = datetime.now()
+                self.currentTime.config(state='normal')
+                self.currentTime.delete(1.0, tk.END)
+                self.currentTime.insert(1.0,now.strftime('%H:%M:%S'))
+                self.currentTime.config(state='disabled')
             #if len( schedule.queue[0].argument[0] ) == 0 :
                 #print('Busy...Downloading waveforms...')
         except Exception as exc:
@@ -565,14 +596,14 @@ class grafit(tk.Frame):
               elif line == '':  # for eof
                 break
               else: # lines with data
-                line.strip()
+                line.strip() # take the newline off so it doesn't become its own, empty list item
                 linearr = line.split(',')
                 linearr = [float(i) for i in linearr]
                     # line[4], line[5] are cat, an 
                     # line[7] is ts (time (seconds)) 
                     # line[13] - line[16] are cat_ll, cat_ul, an_ll, an_ul
                 if count == 1:
-                    newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data
+                    newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data in Unix time
                 ts = linearr[7] - (126144000.0 + 2208988800.0)
                 self.xar.append( (ts - newtime) / 3600)
                 tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
@@ -581,7 +612,12 @@ class grafit(tk.Frame):
                 lower_bound = -(81.9 - 10.0) / np.log(linearr[15] / linearr[14])
                 self.el.append(tau_e - lower_bound)
                 self.eh.append(upper_bound - tau_e)
-            self.start_time = newtime # extending the time so graph renders correctly 
+            self.start_time = newtime # extending the time backwards to accomodate old data so graph renders correctly 
+            # bumping the display clock back to match 
+            self.startTime.config(state='normal')
+            self.startTime.delete(1.0, tk.END)
+            self.startTime.insert('1.0',time.strftime('%H:%M:%S', time.localtime(newtime)))
+            self.startTime.config(state='disabled')
             
             self.scheduThread.start()
         if state == 'overwrite':
@@ -628,7 +664,7 @@ class grafit(tk.Frame):
         self.scheduThread = threading.Thread(target=startSchedule)
         self.scheduThread.daemon = True
 
-        if self.isStandard :
+        if self.isStandard : # old fitter func 
           self.p_i = [49.98262, 46.10659, 10.0, 1.0, 2.9, 81.9, 395.3, 0.8, 0.9, 43.619015]
           self.wavmodel = Model(self.fitter_func,nan_policy='raise')
           self.wavparams = self.wavmodel.make_params()
@@ -644,7 +680,7 @@ class grafit(tk.Frame):
           self.wavparams['tarise'].vary = False
           self.wavparams['offst'].value = self.p_i[9]
           self.wavparams['offst'].vary = True
-        else :
+        else :  # newer version of the fitter func
           """ self.p_i = [37.873185672822736, 40.81570955383812, 10.0, 3.598, 0.980325759727434, 81.9, 1.80825, 0.8, 0.9, 0.2]
           self.wavmodel = Model(self.extra_smeared, nan_policy='raise')
           self.wavparams = self.wavmodel.make_params()
@@ -699,12 +735,12 @@ class grafit(tk.Frame):
         self.el = []
         self.eh = []
 	
-	# seconds to wait between captures
+	    # seconds to wait between captures
         self.waitT_label = tk.Label(height=1, width=30)
         self.waitT_label.config(text="Seconds to wait between captures")
         self.waitT_label.grid(row=18, column=1)
 
-        # seconds to wait input
+        # seconds to wait input 
         defaultTime = tk.StringVar(self.parent)
         defaultTime.set('33.0')  ### 33.0
         self.waitT_input = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', textvariable=defaultTime)
@@ -735,14 +771,20 @@ class grafit(tk.Frame):
 
         self.plot_widget1.grid(row=1, rowspan=64, column=5, columnspan=8)
         self.plot_widget2.grid(row=1, rowspan=64, column=14, columnspan=8)
+
+        # Lower Labels Field
+        # Optional TODO: might be better if these text fields are made into their own class, since right now they all function basically
+        # identically and there's a lot of repeated lines, both here and in plotit/ud 
         
-        self.currentStatus = tk.Text(height=1, width=78, bg='white',fg='#CF9FFF')  # current status is displayed
+        self.currentStatus = tk.Text(height=1, width=78, bg='white',fg='#CF9FFF', wrap='none')  # current status is displayed
         self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
+        self.currentStatus.config(state='disabled')
         self.currentStatus.grid( row=65, column=16, columnspan=10)
         
         now = datetime.now()
-        self.currentTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3')  # current time / time the interface was launched
+        self.currentTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3', wrap='none')  # current time / time the interface was launched
         self.currentTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.currentTime.config(state='disabled')
         self.currentTime.grid( row=69, column=7, columnspan=2)
         
         self.timeLabel2 = tk.Label(height=1, width=12)
@@ -753,73 +795,91 @@ class grafit(tk.Frame):
         self.timeLabel1.config(text="Start Time")
         self.timeLabel1.grid(row=68, column=5, columnspan=2)
         
-        self.startTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3')  # code start time
+        self.startTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3', wrap='none')  # code start time
         self.startTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.startTime.config(state='disabled')
         self.startTime.grid( row=69, column=5, columnspan=2)
         
-        #Stats Info Display
+        #Stats Info Display 
         self.eventNumName = tk.Label(height=1, width=6)
         self.eventNumName.config(text='Event# ')
         self.eventNumName.grid(row=65, column=5)
-        self.eventNumLabel = tk.Text(height=1, width=8) 
+        self.eventNumLabel = tk.Text(height=1, width=8, wrap='none') 
         self.eventNumLabel.insert(1.0,str(0))
+        self.eventNumLabel.config(state='disabled')
         self.eventNumLabel.grid(row=65, column=6)
         
         self.lifetimeName = tk.Label(height=1, width=6)
         self.lifetimeName.config(text='Lifetime ')
         self.lifetimeName.grid(row=65, column=7)
-        self.lifetimeLabel = tk.Text(height=1, width=8) 
+        self.lifetimeLabel = tk.Text(height=1, width=8, wrap='none') 
         self.lifetimeLabel.insert(1.0,'0.00')
+        self.lifetimeLabel.config(state='disabled')
         self.lifetimeLabel.grid(row=65, column=8)
         
         self.cathodeName = tk.Label(height=1, width=6)
         self.cathodeName.config(text='Cathode ')
         self.cathodeName.grid(row=65, column=9)
-        self.cathodeLabel = tk.Text(height=1, width=8) 
+        self.cathodeLabel = tk.Text(height=1, width=8, wrap='none') 
         self.cathodeLabel.insert(1.0,'0.00')
+        self.cathodeLabel.config(state='disabled')
         self.cathodeLabel.grid(row=65, column=10)
         
         self.anodeName = tk.Label(height=1, width=6)
         self.anodeName.config(text='Anode ')
         self.anodeName.grid(row=66, column=5)
-        self.anodeLabel = tk.Text(height=1, width=8) 
+        self.anodeLabel = tk.Text(height=1, width=8, wrap='none') 
         self.anodeLabel.insert(1.0,'0.00')
+        self.anodeLabel.config(state='disabled')
         self.anodeLabel.grid(row=66, column=6)
         
         self.tcName = tk.Label(height=1, width=6)
         self.tcName.config(text='Tc  ')
         self.tcName.grid(row=66, column=7)
-        self.tcLabel = tk.Text(height=1, width=8) 
-        self.tcLabel.insert(1.0,'0.00')
+        self.tcLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tcLabel.insert(1.0,'10.0')
+        self.tcLabel.config(state='disabled')
         self.tcLabel.grid(row=66, column=8)
         
         self.tcriseName = tk.Label(height=1, width=6)
-        self.tcriseName.config(text='Tcise  ')
+        self.tcriseName.config(text='Tcrise  ')
         self.tcriseName.grid(row=66, column=9)
-        self.tcriseLabel = tk.Text(height=1, width=8) 
-        self.tcriseLabel.insert(1.0,'0.00')
+        self.tcriseLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tcriseLabel.insert(1.0,'1.0')
+        self.tcriseLabel.config(state='disabled')
         self.tcriseLabel.grid(row=66, column=10)
         
         self.taName = tk.Label(height=1, width=6)
         self.taName.config(text='Ta  ')
         self.taName.grid(row=67, column=5)
-        self.taLabel = tk.Text(height=1, width=8) 
-        self.taLabel.insert(1.0,'0.00')
+        self.taLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.taLabel.insert(1.0,'81.9')
+        self.taLabel.config(state='disabled')
         self.taLabel.grid(row=67, column=6)
         
         self.tariseName = tk.Label(height=1, width=6)
         self.tariseName.config(text='Tarise  ')
         self.tariseName.grid(row=67, column=7)
-        self.tariseLabel = tk.Text(height=1, width=8) 
-        self.tariseLabel.insert(1.0,'0.00')
+        self.tariseLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tariseLabel.insert(1.0,'2.9')
+        self.tariseLabel.config(state='disabled')
         self.tariseLabel.grid(row=67, column=8)
         
         self.offsetName = tk.Label(height=1, width=6)
         self.offsetName.config(text='Offset  ')
         self.offsetName.grid(row=67, column=9)
-        self.offsetLabel = tk.Text(height=1, width=8) 
+        self.offsetLabel = tk.Text(height=1, width=8, wrap='none') 
         self.offsetLabel.insert(1.0,'0.00')
+        self.offsetLabel.config(state='disabled')
         self.offsetLabel.grid(row=67, column=10)
+        
+        
+        """self.offsetName = tk.Label(height=1, width=6)
+        self.offsetName.config(text='Offset  ')
+        self.offsetName.grid(row=67, column=9)
+        self.offsetLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.offsetLabel.insert(1.0,'0.00')
+        self.offsetLabel.grid(row=67, column=10)"""
 
         # self.fig.canvas.draw()
 
