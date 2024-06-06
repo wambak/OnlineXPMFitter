@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter.font import Font
 import csv
 from tkinter import Canvas
 import socket, threading
@@ -284,9 +285,9 @@ class grafit(tk.Frame):
             #offst=43.619015
 
             # adding data to list that gets printed to file ( columns 5 and 6)
-            dataToFile[4] = float(cat)
-            dataToFile[5] = float(an)
-            dataToFile[6] = float(offst)
+            dataToFile[4] = round(float(cat),3)
+            dataToFile[5] = round(float(an),3)
+            dataToFile[6] = round(float(offst),3)
             dataToFile[8] = float(0.0) #UV
             dataToFile[9] = float(0.0) #IR
             dataToFile[10] = float(result.chisqr/result.nfree) #reduced chisq
@@ -296,8 +297,9 @@ class grafit(tk.Frame):
             self.xar.append((time.time() - self.start_time) / 3600)
             ts = self.xar[-1]*3600.0 + self.start_time  
             dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
-            tau_e = (81.9 - 10.0) / np.log(cat / an)
-            print('cat and an', cat, an, offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
+            tau_e = (81.9 - 10.0) / np.log(dataToFile[4] / dataToFile[5])
+            tau_e = round(tau_e,1)
+            print('cat and an', dataToFile[4], dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
             self.yar.append(tau_e)
 
             upper_bound = -(81.9 - 10.0) / np.log(an_ul / cat_ll)
@@ -366,29 +368,34 @@ class grafit(tk.Frame):
 
             self.lifetimeLabel.config(state='normal')
             self.lifetimeLabel.delete(1.0, tk.END)
-            self.lifetimeLabel.insert(1.0,(str(tau_e)+'+'+str(upper_bound-tau_e)+'-'+str(tau_e-lower_bound)))
+            self.lifetimeLabel.insert(1.0,(str(tau_e)))
+            self.lifeErrorsTxt.delete(1.0, tk.END)
+            self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
+            #('+'++'-'+str(tau_e-lower_bound)
+            self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
+            self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
             self.lifetimeLabel.config(state='disabled')
 
             self.cathodeLabel.config(state='normal')
             self.cathodeLabel.delete(1.0, tk.END)
-            self.cathodeLabel.insert(1.0,str(cat))
+            self.cathodeLabel.insert(1.0,str(dataToFile[4]))
             self.cathodeLabel.config(state='disabled')
 
             self.anodeLabel.config(state='normal')
             self.anodeLabel.delete(1.0, tk.END)
-            self.anodeLabel.insert(1.0,str(an))
+            self.anodeLabel.insert(1.0,str(dataToFile[5]))
             self.anodeLabel.config(state='disabled')
 
             self.offsetLabel.config(state='normal')
             self.offsetLabel.delete(1.0, tk.END)
-            self.offsetLabel.insert(1.0,str(offst))
+            self.offsetLabel.insert(1.0,str(dataToFile[6]))
             self.offsetLabel.config(state='disabled')
             """
             #Time Update
             now = datetime.now()
             self.currentTime.config(state='normal')
             self.currentTime.delete(1.0, tk.END)
-            self.currentTime.insert(1.0,now.strftime('%H:%M:%S'))
+            self.currentTime.insert(1.0,now.strftime('%m-%d-%Y %H:%M:%S'))
             self.currentTime.config(state='disabled')"""
 
         else:
@@ -429,7 +436,7 @@ class grafit(tk.Frame):
                 now = datetime.now()
                 self.currentTime.config(state='normal')
                 self.currentTime.delete(1.0, tk.END)
-                self.currentTime.insert(1.0,now.strftime('%H:%M:%S'))
+                self.currentTime.insert(1.0,now.strftime('%m-%d-%Y %H:%M:%S'))
                 self.currentTime.config(state='disabled')
             #if len( schedule.queue[0].argument[0] ) == 0 :
                 #print('Busy...Downloading waveforms...')
@@ -616,7 +623,7 @@ class grafit(tk.Frame):
             # bumping the display clock back to match 
             self.startTime.config(state='normal')
             self.startTime.delete(1.0, tk.END)
-            self.startTime.insert('1.0',time.strftime('%H:%M:%S', time.localtime(newtime)))
+            self.startTime.insert('1.0',time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(newtime)))
             self.startTime.config(state='disabled')
             
             self.scheduThread.start()
@@ -660,7 +667,7 @@ class grafit(tk.Frame):
         #self.T = tk.Text(self.parent, height=1, width=5, font=("Courier", 64))
         #self.T.grid(row=0, column=1)
         #self.T.config(foreground="blue")
-        self.isStandard = False
+        self.isStandard = True
         self.scheduThread = threading.Thread(target=startSchedule)
         self.scheduThread.daemon = True
 
@@ -779,99 +786,112 @@ class grafit(tk.Frame):
         self.currentStatus = tk.Text(height=1, width=78, bg='white',fg='#CF9FFF', wrap='none')  # current status is displayed
         self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
         self.currentStatus.config(state='disabled')
-        self.currentStatus.grid( row=65, column=16, columnspan=10)
+        self.currentStatus.grid( row=71, column=16, columnspan=10)
         
         now = datetime.now()
-        self.currentTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3', wrap='none')  # current time / time the interface was launched
-        self.currentTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.currentTime = tk.Text(height=1, width=21, bg='white',fg='#7393B3', wrap='none')  # current time / time the interface was launched
+        self.currentTime.insert(tk.END, now.strftime('%m-%d-%Y %H:%M:%S'))
         self.currentTime.config(state='disabled')
-        self.currentTime.grid( row=69, column=7, columnspan=2)
+        self.currentTime.grid( row=71, column=8,columnspan=3,sticky = tk.W)
         
         self.timeLabel2 = tk.Label(height=1, width=12)
         self.timeLabel2.config(text="Current Time")
-        self.timeLabel2.grid(row=68, column=7,columnspan=2)
-        
+        self.timeLabel2.grid(row=70, column=8,sticky = tk.SW)
+        self.dummyspacer = tk.Label(height=1,width=1)
+        self.dummyspacer.config(text=' ')
+        self.dummyspacer.config(bg=parent['background'])
+        self.dummyspacer.grid(row=68,column=5)
         self.timeLabel1 = tk.Label(height=1, width=12)
         self.timeLabel1.config(text="Start Time")
-        self.timeLabel1.grid(row=68, column=5, columnspan=2)
+        self.timeLabel1.grid(row=70, column=5,sticky = tk.SW)
         
-        self.startTime = tk.Text(height=1, width=8, bg='white',fg='#7393B3', wrap='none')  # code start time
-        self.startTime.insert(tk.END, now.strftime('%H:%M:%S'))
+        self.startTime = tk.Text(height=1, width=21, bg='white',fg='#7393B3', wrap='none')  # code start time
+        self.startTime.insert(tk.END, now.strftime('%m-%d-%Y %H:%M:%S'))
         self.startTime.config(state='disabled')
-        self.startTime.grid( row=69, column=5, columnspan=2)
+        self.startTime.grid( row=71, column=5, columnspan=3, sticky = tk.W)
+
+        self.dummyspacer2 = tk.Label(height=1,width=1)
+        self.dummyspacer2.config(text=' ')
+        self.dummyspacer2.config(bg=parent['background'])
+        self.dummyspacer2.grid(row=72,column=5)
         
         #Stats Info Display 
         self.eventNumName = tk.Label(height=1, width=6)
         self.eventNumName.config(text='Event# ')
-        self.eventNumName.grid(row=65, column=5)
+        self.eventNumName.grid(row=65, column=5, sticky=tk.E)
         self.eventNumLabel = tk.Text(height=1, width=8, wrap='none') 
         self.eventNumLabel.insert(1.0,str(0))
         self.eventNumLabel.config(state='disabled')
         self.eventNumLabel.grid(row=65, column=6)
         
         self.lifetimeName = tk.Label(height=1, width=6)
-        self.lifetimeName.config(text='Lifetime ')
+        self.lifetimeName.config(text='Lifetime')
         self.lifetimeName.grid(row=65, column=7)
-        self.lifetimeLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.lifetimeLabel = tk.Text(height=1, width=11, wrap='none') 
         self.lifetimeLabel.insert(1.0,'0.00')
+        self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
+        self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
         self.lifetimeLabel.config(state='disabled')
-        self.lifetimeLabel.grid(row=65, column=8)
-        
+        self.lifetimeLabel.grid(row=65, column=8,sticky=tk.E)
+        self.lifeErrorsTxt = tk.Text(height=2, width=8, font=Font(size=6))  
+        self.lifeErrorsTxt.insert(1.0,'0.000\n0.000')
+        self.lifeErrorsTxt.grid(row=65,column=9,sticky=tk.W)
+
         self.cathodeName = tk.Label(height=1, width=6)
-        self.cathodeName.config(text='Cathode ')
-        self.cathodeName.grid(row=65, column=9)
+        self.cathodeName.config(text='Cathode')
+        self.cathodeName.grid(row=65, column=10)
         self.cathodeLabel = tk.Text(height=1, width=8, wrap='none') 
         self.cathodeLabel.insert(1.0,'0.00')
         self.cathodeLabel.config(state='disabled')
-        self.cathodeLabel.grid(row=65, column=10)
+        self.cathodeLabel.grid(row=65, column=11)
         
         self.anodeName = tk.Label(height=1, width=6)
-        self.anodeName.config(text='Anode ')
-        self.anodeName.grid(row=66, column=5)
+        self.anodeName.config(text='Anode')
+        self.anodeName.grid(row=66, column=5, sticky=tk.E)
         self.anodeLabel = tk.Text(height=1, width=8, wrap='none') 
         self.anodeLabel.insert(1.0,'0.00')
         self.anodeLabel.config(state='disabled')
         self.anodeLabel.grid(row=66, column=6)
         
         self.tcName = tk.Label(height=1, width=6)
-        self.tcName.config(text='Tc  ')
+        self.tcName.config(text='Tc')
         self.tcName.grid(row=66, column=7)
-        self.tcLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tcLabel = tk.Text(height=1, width=11, wrap='none') 
         self.tcLabel.insert(1.0,'10.0')
         self.tcLabel.config(state='disabled')
-        self.tcLabel.grid(row=66, column=8)
+        self.tcLabel.grid(row=66, column=8, sticky=tk.W)
         
         self.tcriseName = tk.Label(height=1, width=6)
-        self.tcriseName.config(text='Tcrise  ')
-        self.tcriseName.grid(row=66, column=9)
+        self.tcriseName.config(text='Tcrise')
+        self.tcriseName.grid(row=66, column=10)
         self.tcriseLabel = tk.Text(height=1, width=8, wrap='none') 
         self.tcriseLabel.insert(1.0,'1.0')
         self.tcriseLabel.config(state='disabled')
-        self.tcriseLabel.grid(row=66, column=10)
+        self.tcriseLabel.grid(row=66, column=11)
         
         self.taName = tk.Label(height=1, width=6)
-        self.taName.config(text='Ta  ')
-        self.taName.grid(row=67, column=5)
+        self.taName.config(text='Ta')
+        self.taName.grid(row=67, column=5, sticky=tk.E)
         self.taLabel = tk.Text(height=1, width=8, wrap='none') 
         self.taLabel.insert(1.0,'81.9')
         self.taLabel.config(state='disabled')
         self.taLabel.grid(row=67, column=6)
         
         self.tariseName = tk.Label(height=1, width=6)
-        self.tariseName.config(text='Tarise  ')
+        self.tariseName.config(text='Tarise')
         self.tariseName.grid(row=67, column=7)
-        self.tariseLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tariseLabel = tk.Text(height=1, width=11, wrap='none') 
         self.tariseLabel.insert(1.0,'2.9')
         self.tariseLabel.config(state='disabled')
-        self.tariseLabel.grid(row=67, column=8)
+        self.tariseLabel.grid(row=67, column=8, sticky=tk.E)
         
         self.offsetName = tk.Label(height=1, width=6)
         self.offsetName.config(text='Offset  ')
-        self.offsetName.grid(row=67, column=9)
+        self.offsetName.grid(row=67, column=10)
         self.offsetLabel = tk.Text(height=1, width=8, wrap='none') 
         self.offsetLabel.insert(1.0,'0.00')
         self.offsetLabel.config(state='disabled')
-        self.offsetLabel.grid(row=67, column=10)
+        self.offsetLabel.grid(row=67, column=11)
         
         
         """self.offsetName = tk.Label(height=1, width=6)
