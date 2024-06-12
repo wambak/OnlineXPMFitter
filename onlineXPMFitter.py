@@ -39,10 +39,14 @@ volt0 = []
 isfibersave = True
 total = 0.0
 energized = False   # SHOULD start as OFF by default
+in_progress = False
 
 def startSchedule():
+    try :
     #print('running schedule')
-    schedule.run()
+        schedule.run()
+    except Exception as exc :
+        return
     #print('finished schedule')
     return
 
@@ -147,272 +151,239 @@ def appendBox(parent):
     return appendBox.mode
 
 class grafit(tk.Frame):
-    def updateShutter(self, shutterState):
-        if shutterState == True:
-            print("shutter is Closed")
-        else:
-            print("shutter is Opened")
-        return
-
-    def captureRaw(self):
-        data = ''
-        f = urllib.request.urlopen('http://localhost:5022/?COMMAND=curve?') # connects to XPMSimulator.py
-        #f = urllib.request.urlopen('http://134.79.229.21/?COMMAND=curve?')
-        data = f.read().decode()
-        print('received ' + data)
-
-        wfm = [float(u) for u in data.split(',')]
-        # print(len(wfm))
-
-        # CALLING WFMPRE TO CONVERT WFM TO MS AND VOLTS
-        f2 = urllib.request.urlopen('http://localhost:5022/?COMMAND=wfmpre?')
-        #f2 = urllib.request.urlopen('http://134.79.229.21/?COMMAND=wfmpre?')
-        wfmpre = f2.read().decode()
-        # print(wfmpre)
-
-        # EXAMPLE WFMPRE:
-        # wfmpre = '1;8;ASC;RP;MSB;500;"Ch1, AC coupling, 2.0E-2 V/div, 4.0E-5 s/div, 500 points, Average mode";Y;8.0E-7;0;-1.2E-4;"s";8.0E-4;0.0E0;-5.4E1;"V"'
-        t = [1.0e6 * (float(wfmpre.split(';')[8]) * float(i) + float(wfmpre.split(';')[10])) for i in
-             range(0, len(wfm))]
-        volt = [1.0e3 * ( (float(dl) - float(wfmpre.split(';')[14])) * float(wfmpre.split(';')[12]) - float(
-            wfmpre.split(';')[13]) ) for dl in wfm]
-
-        return zip(t, volt)
-
-    def conditionWVF(self, signalBgd, background):
-
-        return signalBgd - background
-
-    def calcTAU(self, t, volt):
-        result = self.wavmodel.fit(wvPlot, self.wavparams, x=t, method='nelder')
-        # print('results--->', result.ci_out)
-
-        # result = self.wavmodel.fit(wvPlot[t<150],self.wavparams,x=t[t<150])
-        b = result.best_values
-        # errors = result.ci_out
-        tfine = np.arange(t[0], t[-1] + 0.8, (t[1] - t[0]) / 10.0)
-
-        ci_txt = result.ci_report()
-
-        cat = float(ci_txt.split('\n')[1].split('  ')[4])
-        an = float(ci_txt.split('\n')[2].split('  ')[4])
-
-        return
 
     def plotit(self,  text='' , dwell=0.0 , islaser=False ):
-        if islaser : #FIXME: the laser traces shouldn't just be getting ignored
-          return
-        data = ''
-        f = urllib.request.urlopen('http://localhost:5022/?COMMAND=curve?')
-        #f = urllib.request.urlopen('http://134.79.229.21/?COMMAND=curve?')
-        data = f.read().decode()
-        print('received ' + data)
-
-        wfm = [float(u) for u in data.split(',')]
-        # print(len(wfm))
-
-        # CALLING WFMPRE TO CONVERT WFM TO MS AND VOLTS
-        f2 = urllib.request.urlopen('http://localhost:5022/?COMMAND=wfmpre?')
-        #f2 = urllib.request.urlopen('http://134.79.229.21/?COMMAND=wfmpre?')
-        wfmpre = f2.read().decode()
-
-        # EXAMPLE WFMPRE:
-        # wfmpre = '1;8;ASC;RP;MSB;500;"Ch1, AC coupling, 2.0E-2 V/div, 4.0E-5 s/div, 500 points, Average mode";Y;8.0E-7;0;-1.2E-4;"s";8.0E-4;0.0E0;-5.4E1;"V"'
-        t = [1.0e6 * (float(wfmpre.split(';')[8]) * float(i) + float(wfmpre.split(';')[10])) for i in
-             range(0, len(wfm))]
-        volt = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(
-            wfmpre.split(';')[13])) for dl in wfm]
-
-        # if len(self.xar) > 5000:
-        #     self.xar.pop(0)
-        #     self.yar.pop(0)
-
-        try:
-            pathExists = (WindowsPath.home() / '.shutterclosed').exists()
-        except:
-            pathExists = Path('/tmp/.shutterclosed').exists()
-        
-
-        #if  (WindowsPath.home() / '.shutterclosed').exists() == False:
-        if pathExists == False:
-            self.topHat = np.array(wfm)
-            dataToFile = np.zeros(17)
-
-            #timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            dataToFile[0] = 10.0
-            dataToFile[1] = 81.9
-            dataToFile[2] = 1.0
-            dataToFile[3] = 2.9
-            # Waveform to plot
-            print(len(self.topHat), len(self.nontopHat))
-            wvPlot = self.topHat - self.nontopHat
-            wvPlot = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(wfmpre.split(';')[13])) for dl in wvPlot]
-            if self.isStandard :
-                wts = np.zeros(len(t))
-                for idx,ti in zip(range(0,len(t)),t) :
-                  if ( ti > -50.0 and ti < -15.0 ) or ( ti > 25.0 and ti < 65.0 ) or ( ti > 125.0 and ti < 150.0 ) :
-                    wts[idx]=1.0
-                result = self.wavmodel.fit(wvPlot, self.wavparams, weights = wts, x=t, method='nelder', max_nfev=1000)
-                b = result.params
-                ci_txt = result.ci_report()
-            else :
-                wts = np.ones(len(t))
-                for idx,ti in zip(range(0,len(t)),t) :
-                  if ( ti > -50.0 and ti < -15.0 ) or ( ti > 25.0 and ti < 65.0 ) or ( ti > 125.0 and ti < 150.0 ) :
-                    wts[idx]=1.0
-                result = self.wavmodel.fit(wvPlot, self.wavparams, weights = wts, x=t)
-                #result = self.wavmodel.fit(wvPlot, self.wavparams, x=t)
-                b = result.best_values
-                ci_txt = result.ci_report()
-
-            # print('results--->', result.ci_out)
-            catrow = (ci_txt.split('\n')[1].split(':')[1])
-            anrow = (ci_txt.split('\n')[2].split(':')[1])
-            #offstrow = (ci_txt.split('\n')[3].split(':')[1]) #this is causing an error and i don't think the data itself is actually used for anything?
-            cat = b['cat']
-            an = b['an']
-            offst = b['offst'] 
-            cat_ll = cat + np.fromstring(catrow,dtype=float,sep=' ')[2]
-            cat_ul = cat + np.fromstring(catrow,dtype=float,sep=' ')[4]
-            an_ll = an + np.fromstring(anrow,dtype=float,sep=' ')[2]
-            an_ul = an + np.fromstring(anrow,dtype=float,sep=' ')[4]
-            #print(ci_txt)
-
-            tfine = np.arange(t[0], t[-1] + 0.8, (t[1] - t[0]) / 10.0)
-
-            #cat=49.98262 
-            #an=46.10659
-            #offst=43.619015
-
-            # adding data to list that gets printed to file ( columns 5 and 6)
-            dataToFile[4] = round(float(cat),3)
-            dataToFile[5] = round(float(an),3)
-            dataToFile[6] = round(float(offst),3)
-            dataToFile[8] = float(0.0) #UV
-            dataToFile[9] = float(0.0) #IR
-            dataToFile[10] = float(result.chisqr/result.nfree) #reduced chisq
-            dataToFile[11] = float(0.0)
-            dataToFile[12] = float(0.0)
-
-            self.xar.append((time.time() - self.start_time) / 3600)
-            ts = self.xar[-1]*3600.0 + self.start_time  
-            dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
-            tau_e = (81.9 - 10.0) / np.log(dataToFile[4] / dataToFile[5])
-            tau_e = round(tau_e,1)
-            print('cat and an', dataToFile[4], dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
-            self.yar.append(tau_e)
-
-            upper_bound = -(81.9 - 10.0) / np.log(an_ul / cat_ll)
-            lower_bound = -(81.9 - 10.0) / np.log(an_ll / cat_ul)
-
-            # we are appending the data to the row which will be written to the file
-            dataToFile[13] = float(cat_ll) 
-            dataToFile[14] = float(cat_ul)
-            dataToFile[15] = float(an_ll)
-            dataToFile[16] = float(an_ul)
-
-            fh = open(self.savePath, 'a') 
-
-            writer = csv.writer(fh)
-            writer.writerows([dataToFile])
-            fh.close()
-
-            self.el.append(tau_e - lower_bound)
-            self.eh.append(upper_bound - tau_e)
-
-            self.plt1.clear()
-            self.plt2.clear()
-
-            # PLOTTTING PEAKS:
-            # self.plt.subplot(211)
+        baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
+        if islaser : #Handle the laser traces
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH2' ).read()
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            f2 = urllib.request.urlopen( myurl )
+            wfmpre = f2.read().decode()
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            f = urllib.request.urlopen( myurl )
+            data = f.read().decode()
+            wfm = [float(u) for u in data.split(',')]
+            peak1volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH3' ).read()
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            f2 = urllib.request.urlopen( myurl )
+            wfmpre = f2.read().decode()
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            f = urllib.request.urlopen( myurl )
+            data = f.read().decode()
+            wfm = [float(u) for u in data.split(',')]
+            peak2volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            self.dataToFile[0] = 10.0
+            self.dataToFile[1] = 81.9
+            self.dataToFile[2] = 1.0
+            self.dataToFile[3] = 2.9
+            lasermax = 100.0*max(peak1volt)
+            if lasermax < 0 :
+                lasermax = 0.0
+            self.dataToFile[8] = round(lasermax,2) #IR
+            lasermax = 100.0*max(peak2volt)
+            if lasermax < 0 :
+                lasermax = 0.0
+            self.dataToFile[9] = round(lasermax,2) #UV
+            self.IRtext.delete(1.0, tk.END)
+            self.IRtext.insert( 1.0, str(self.dataToFile[8]) )
+            self.UVtext.delete(1.0, tk.END)
+            self.UVtext.insert( 1.0, str(self.dataToFile[9]) )
+            self.plt1.plot(self.t, peak1volt, 'm-')
+            self.plt1.plot(self.t, peak2volt, 'c-')
+            self.maxIR.append( self.dataToFile[8] )
+            self.maxUV.append( self.dataToFile[9] )
+            self.figure2.axes[0].cla()
             self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='o',mec='r',mfc='None')
+            self.laserX.append(self.xar[-1])
+            self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
+            self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
             self.plt2.set_title("$e^{-}$ Lifetime vs Time")
             self.plt2.set_ylabel('$\\tau$($\mu$s)')
             self.plt2.set_xlabel('Time (h)')
-            self.figure2.tight_layout()
-            # PLOTTING WAVEFORM:
-            # self.plt.subplot(212)
-            self.plt1.plot(t, wvPlot, 'g-')
-            tfine = np.arange(t[0], t[-1] + 0.8, (t[1] - t[0]) / 10.0)
+            fh = open(self.savePath, 'a') 
+            writer = csv.writer(fh)
+            writer.writerows([self.dataToFile])
+            fh.close()
+            self.ctr += 1
+        else :
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
+            urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH1' ).read()
+            data = ''
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            print(myurl)
+            f = urllib.request.urlopen( myurl )
+            data = f.read().decode()
+            print('received ' + data)
+
+            wfm = [float(u) for u in data.split(',')]
+
+            # CALLING WFMPRE TO CONVERT WFM TO MS AND VOLTS
+            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            print(myurl)
+            f2 = urllib.request.urlopen( myurl )
+            wfmpre = f2.read().decode()
+
+            # EXAMPLE WFMPRE:
+            # wfmpre = '1;8;ASC;RP;MSB;500;"Ch1, AC coupling, 2.0E-2 V/div, 4.0E-5 s/div, 500 points, Average mode";Y;8.0E-7;0;-1.2E-4;"s";8.0E-4;0.0E0;-5.4E1;"V"'
+            self.t = [1.0e6 * (float(wfmpre.split(';')[8]) * float(i) + float(wfmpre.split(';')[10])) for i in range(0, len(wfm))]
+            volt = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(wfmpre.split(';')[13])) for dl in wfm]
+
+            try:
+                pathExists = (WindowsPath.home() / '.shutterclosed').exists()
+            except:
+                pathExists = Path('/tmp/.shutterclosed').exists()
+
+            if pathExists == False: #store signal+background trace in self.topHat
+                self.topHat = np.array(wfm)
+
+                # Waveform to plot
+                print(len(self.topHat), len(self.nontopHat))
+                wvPlot = self.topHat - self.nontopHat
+                wvPlot = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(wfmpre.split(';')[13])) for dl in wvPlot]
+                if self.isStandard :
+                    wts = np.zeros(len(self.t))
+                    for idx,ti in zip(range(0,len(self.t)),self.t) :
+                        if ( ti > -50.0 and ti < -15.0 ) or ( ti > 25.0 and ti < 65.0 ) or ( ti > 125.0 and ti < 150.0 ) :
+                            wts[idx]=1.0
+                    result = self.wavmodel.fit(wvPlot, self.wavparams, weights = wts, x=self.t, method='nelder', max_nfev=1000)
+                    b = result.params
+                    ci_txt = result.ci_report()
+                else :
+                    wts = np.ones(len(self.t))
+                    for idx,ti in zip(range(0,len(self.t)),self.t) :
+                        if ( ti > -50.0 and ti < -15.0 ) or ( ti > 25.0 and ti < 65.0 ) or ( ti > 125.0 and ti < 150.0 ) :
+                            wts[idx]=1.0
+                    result = self.wavmodel.fit(wvPlot, self.wavparams, weights = wts, x=self.t)
+                    #result = self.wavmodel.fit(wvPlot, self.wavparams, x=t)
+                    b = result.best_values
+                    ci_txt = result.ci_report()
+
+                # print('results--->', result.ci_out)
+                catrow = (ci_txt.split('\n')[1].split(':')[1])
+                anrow = (ci_txt.split('\n')[2].split(':')[1])
+                cat = b['cat']
+                an = b['an']
+                offst = b['offst'] 
+                cat_ll = cat + np.fromstring(catrow,dtype=float,sep=' ')[2]
+                cat_ul = cat + np.fromstring(catrow,dtype=float,sep=' ')[4]
+                an_ll = an + np.fromstring(anrow,dtype=float,sep=' ')[2]
+                an_ul = an + np.fromstring(anrow,dtype=float,sep=' ')[4]
+                #print(ci_txt)
+
+                tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
+
+                #cat=49.98262 
+                #an=46.10659
+                #offst=43.619015
+
+                # adding data to list that gets printed to file ( columns 5 and 6)
+                self.dataToFile[4] = round(float(cat),3)
+                self.dataToFile[5] = round(float(an),3)
+                self.dataToFile[6] = round(float(offst),3)
+                self.dataToFile[10] = float(result.chisqr/result.nfree) #reduced chisq
+                self.dataToFile[11] = float(0.0)
+                self.dataToFile[12] = float(0.0)
+
+                self.xar.append((time.time() - self.start_time) / 3600)
+                ts = self.xar[-1]*3600.0 + self.start_time  
+                self.dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
+                tau_e = (81.9 - 10.0) / np.log(self.dataToFile[4] / self.dataToFile[5])
+                tau_e = round(tau_e,1)
+                print('cat and an', self.dataToFile[4], self.dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
+                self.yar.append(tau_e)
+
+                upper_bound = -(81.9 - 10.0) / np.log(an_ul / cat_ll)
+                lower_bound = -(81.9 - 10.0) / np.log(an_ll / cat_ul)
+
+                # we are appending the data to the row which will be written to the file
+                self.dataToFile[13] = float(cat_ll) 
+                self.dataToFile[14] = float(cat_ul)
+                self.dataToFile[15] = float(an_ll)
+                self.dataToFile[16] = float(an_ul)
+
+                self.el.append(tau_e - lower_bound)
+                self.eh.append(upper_bound - tau_e)
+
+                self.figure1.axes[0].cla()
+
+                # PLOTTTING PEAKS:
+                # self.plt.subplot(211)
+                # PLOTTING WAVEFORM:
+                # self.plt.subplot(212)
+                self.plt1.plot(self.t, wvPlot, 'g-')
+
+                tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
             
-            if self.isStandard :
-                #self.plt1.plot(tfine,
-                #               self.wavmodel.eval(x=tfine, an=b['an'], cat=b['cat'], tcrise=b['tcrise'],
-                #               tarise=b['tarise'], offst=b['offst'], thold=b['thold'] ), 'r-', label='standard')
-                self.plt1.plot(tfine,
-                               self.wavmodel.eval(x=tfine, cat=cat, an=an, tcrise=b['tcrise'],
-                               tarise=b['tarise'], offst=offst, thold=b['thold'] ), 'r-', label='standard')
-            else :
-                #self.plt1.plot(tfine,
-                #               self.wavmodel.eval(x=tfine, an=b['an'], cat=b['cat'], cent_c=b['cent_c'], tcrise=b['tcrise'],
-                #               tarise=b['tarise'], cent_a=b['cent_a'], gam_a=b['gam_a'],
-                #               gam_c=b['gam_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='proposed: an=42.04 mV')
-                self.plt1.plot(tfine, 
-                               self.wavmodel.eval(x=tfine, cat=cat, an=an, sig_c=b['sig_c'], gam_c=b['gam_c'], 
-                               sig_a=b['sig_a'], skew_c=b['skew_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='new voigt')
+                if self.isStandard :
+                    #self.plt1.plot(tfine,
+                    #               self.wavmodel.eval(x=tfine, an=b['an'], cat=b['cat'], tcrise=b['tcrise'],
+                    #               tarise=b['tarise'], offst=b['offst'], thold=b['thold'] ), 'r-', label='standard')
+                    self.plt1.plot(tfine,self.wavmodel.eval(x=tfine, cat=cat, an=an, tcrise=b['tcrise'],tarise=b['tarise'], offst=offst, thold=b['thold'] ), 'r-', label='standard')
+                else :
+                    #self.plt1.plot(tfine,
+                    #               self.wavmodel.eval(x=tfine, an=b['an'], cat=b['cat'], cent_c=b['cent_c'], tcrise=b['tcrise'],
+                    #               tarise=b['tarise'], cent_a=b['cent_a'], gam_a=b['gam_a'],
+                    #               gam_c=b['gam_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='proposed: an=42.04 mV')
+                    self.plt1.plot(tfine, self.wavmodel.eval(x=tfine, cat=cat, an=an, sig_c=b['sig_c'], gam_c=b['gam_c'], sig_a=b['sig_a'], skew_c=b['skew_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='new voigt')
 
-            self.plt1.set_title("Most recent waveform")
-            self.plt1.set_ylabel("MilliVolts")
-            self.plt1.set_xlabel(u"Time (\u03bcs)")
-            self.figure1.tight_layout()
-            self.canvas1.draw_idle()
-            self.canvas2.draw_idle()
+                #self.canvas2.draw_idle()
 
-            #Statistics labels Updates 
-            # optional TODO: if anyone ever updates these fields with that wrapper, do it with these functions too
-            self.eventNumLabel.config(state='normal') # disabled makes it read only but also stops us from editing, so we need to 
+                #Statistics labels Updates 
+                # optional TODO: if anyone ever updates these fields with that wrapper, do it with these functions too
+                self.eventNumLabel.config(state='normal') # disabled makes it read only but also stops us from editing, so we need to 
                                                     # switch back to update the display. 
-            self.eventNumLabel.delete(1.0, tk.END)  # clear row before inserting
-            self.eventNumLabel.insert(1.0,str(self.ctr))
-            self.eventNumLabel.config(state='disabled')
+                self.eventNumLabel.delete(1.0, tk.END)  # clear row before inserting
+                self.eventNumLabel.insert(1.0,str(self.ctr))
+                self.eventNumLabel.config(state='disabled')
 
-            self.lifetimeLabel.config(state='normal')
-            self.lifetimeLabel.delete(1.0, tk.END)
-            self.lifetimeLabel.insert(1.0,(str(tau_e)))
-            self.lifeErrorsTxt.delete(1.0, tk.END)
-            self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
-            #('+'++'-'+str(tau_e-lower_bound)
-            self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
-            self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
-            self.lifetimeLabel.config(state='disabled')
+                self.lifetimeLabel.config(state='normal')
+                self.lifetimeLabel.delete(1.0, tk.END)
+                self.lifetimeLabel.insert(1.0,(str(tau_e)))
+                self.lifeErrorsTxt.delete(1.0, tk.END)
+                self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
+                #('+'++'-'+str(tau_e-lower_bound)
+                self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
+                self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
+                self.lifetimeLabel.config(state='disabled')
 
-            self.cathodeLabel.config(state='normal')
-            self.cathodeLabel.delete(1.0, tk.END)
-            self.cathodeLabel.insert(1.0,str(dataToFile[4]))
-            self.cathodeLabel.config(state='disabled')
+                self.cathodeLabel.config(state='normal')
+                self.cathodeLabel.delete(1.0, tk.END)
+                self.cathodeLabel.insert(1.0,str(self.dataToFile[4]))
+                self.cathodeLabel.config(state='disabled')
 
-            self.anodeLabel.config(state='normal')
-            self.anodeLabel.delete(1.0, tk.END)
-            self.anodeLabel.insert(1.0,str(dataToFile[5]))
-            self.anodeLabel.config(state='disabled')
+                self.anodeLabel.config(state='normal')
+                self.anodeLabel.delete(1.0, tk.END)
+                self.anodeLabel.insert(1.0,str(self.dataToFile[5]))
+                self.anodeLabel.config(state='disabled')
 
-            self.offsetLabel.config(state='normal')
-            self.offsetLabel.delete(1.0, tk.END)
-            self.offsetLabel.insert(1.0,str(dataToFile[6]))
-            self.offsetLabel.config(state='disabled')
-            """
-            #Time Update
-            now = datetime.now()
-            self.currentTime.config(state='normal')
-            self.currentTime.delete(1.0, tk.END)
-            self.currentTime.insert(1.0,now.strftime('%m-%d-%Y %H:%M:%S'))
-            self.currentTime.config(state='disabled')"""
+                self.offsetLabel.config(state='normal')
+                self.offsetLabel.delete(1.0, tk.END)
+                self.offsetLabel.insert(1.0,str(self.dataToFile[6]))
+                self.offsetLabel.config(state='disabled')
+                
+                self.plt1.set_title("Most recent waveform")
+                self.plt1.set_ylabel("MilliVolts")
+                self.plt1.set_xlabel(u"Time (\u03bcs)")
+            else:
+                self.nontopHat = np.array(wfm)
 
-        else:
-            self.nontopHat = np.array(wfm)
-
-        self.ctr += 1
-        
+        self.canvas1.draw_idle()
+        self.canvas2.draw_idle()
         # here we check if the save file has been defined, if so write to it, if not state that it is not set
         try:
             self.saveFile
             if not self.saveFile.closed:
-                print('Writing data to save file')
-                #try:
-                #    dataToFile
-                #    if dataToFile.
-                #saveData = str( ','.join( str(i) for i in dataToFile)) + '\n'
-                #saveFile.write(saveData)
+                print('Save file is still open')
             else:
                 print('Save file has been closed')
         except :
@@ -421,6 +392,11 @@ class grafit(tk.Frame):
     def ud(self) :
         try :
             #print('schedule length',len(schedule.queue))
+            if in_progress == False and total > 0 :
+                self.currentStatus.config(state='normal')
+                self.currentStatus.delete(1.0,tk.END)
+                self.currentStatus.insert(1.0,'Ending the run')
+                self.currentStatus.config(state='disabled')
             if len( schedule.queue ) > 0 :
                 ct = int((schedule.queue[0].time - time.time())*100)
                 #print(ct)
@@ -438,8 +414,8 @@ class grafit(tk.Frame):
                 self.currentTime.delete(1.0, tk.END)
                 self.currentTime.insert(1.0,now.strftime('%m-%d-%Y %H:%M:%S'))
                 self.currentTime.config(state='disabled')
-            #if len( schedule.queue[0].argument[0] ) == 0 :
-                #print('Busy...Downloading waveforms...')
+            if len( schedule.queue ) == 0 :
+                print('Schedule is depopulated')
         except Exception as exc:
             for event in schedule.queue :
                 schedule.cancel(event)
@@ -449,12 +425,42 @@ class grafit(tk.Frame):
         self.parent.after(1000,self.ud)
 
     def on_closing(self):
+        try :
+            for event in schedule.queue :
+                schedule.cancel(event)
+            print("File closed")
+            self.saveFile.close()
+            openshutter('',0.0)
+        except Exception as exc:
+            return
+            #os._exit(0)
+
+    def end_it(self):
+        global in_progress
+        global total
+        if in_progress == False :
+            return
+        dwellclosed = 32.0 ### 32.0
+        dwellopen = float(self.waitT_input.get())
+        fibersavetime = 10800.0 #for fibersave
+        tbc = dwellclosed
+        events_remaining = len( schedule.queue )
+        print('Progress',events_remaining)
+        total = 0.0
         for event in schedule.queue :
             schedule.cancel(event)
+
+        schedule.enter( total, 1, openshutter, argument=('Ending the run ',5.0) ) 
+        total = total + 5
+        schedule.run()
+        
         print("File closed")
         self.saveFile.close()
-        openshutter('',0.0)
-        #os._exit(0)
+        self.ctr = 0
+
+        self.scheduThread = threading.Thread(target=startSchedule)
+
+        in_progress = False
 
     def fitter_func(self, x, cat, an, tcrise, tarise, offst,thold ):
         global err
@@ -515,7 +521,7 @@ class grafit(tk.Frame):
         return cathode + anode + offst
 
     def control(self):
-        #print("Starting self.control...")
+        #print("Self.control...")
         try :
             global total
             dwellclosed = 32.0 ### 32.0
@@ -523,7 +529,8 @@ class grafit(tk.Frame):
             fibersavetime = 10800.0 #for fibersave
             tbc = dwellclosed
             tf = 0 
-            if len( schedule.queue ) == 0 or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) : 
+            if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) :
+                print( 'length of queue',len( schedule.queue ) )
                 for iii in range(0,10) :
                     iodelay = 12
                     text = '*Initializing acquisition ---SHUTTER CLOSED--- '
@@ -544,10 +551,10 @@ class grafit(tk.Frame):
                     total = total + dwellopen 
                     schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellopen))
                     #text = 'Acquisition mode ---SHUTTER OPEN--- capturing laser traces '
-                    total = total + 1 
-                    schedule.enter( total, 1, root.graph.plotit , argument = ('Getting UV Laser trace ',1.0,True) )
-                    total = total + 1 
-                    schedule.enter( total, 1, root.graph.plotit , argument = ('Getting IR Laser trace ',1.0,True) )
+                    total = total + 32 
+                    schedule.enter( total, 1, root.graph.plotit , argument = ('Getting IR, UV Laser traces ',32.0,True) )
+                    #total = total + 1 
+                    #schedule.enter( total, 1, root.graph.plotit , argument = ('Getting UV Laser trace ',1.0,True) )
                     if isfibersave and iii == 9 : 
                         text = '*Fiber-saving mode: ---CLOSING SHUTTER--- '
                         #print(text)
@@ -559,90 +566,131 @@ class grafit(tk.Frame):
                         text = '*Acquisition mode ---CLOSING SHUTTER--- preparing next acquisition '
                         schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
                         total = total + tbc 
+                #print('schedule has '+str( len(schedule.queue) ))
                 if isfibersave : 
                     total = fibersavetime
                 else :
                     total = tbc
         except Exception as exc :
             for event in schedule.queue :
+                print( event )
                 schedule.cancel(event)
             self.saveFile.close()
             #os._exit(0)
         self.parent.after(10, self.control) 
 
     def set_saveFile(self):
-
-      """def close_saveFile():
-          #print('File closed')
-          self.saveFile.close()"""
-
-      self.savePath=self.fileSaveInput.get('1.0', 'end-1c')
-      self.currSavePath = tk.Label(height=1, width=30)
-      self.currSavePath.config(text="File Path: " + self.savePath)
-      self.currSavePath.grid(row=2, column=1)
-
-      if total: # stops the program from trying to start if it's already running
-          tk.messagebox.showerror(title="Error", message='Program is already running!')
-          return
-
-      if os.path.isfile(self.savePath): # if file exists, check for start mode 
-        state = appendBox(self.parent)
- 
-        if state == 'append':
-            self.control() 
-
-            print("Opening in append mode")
-            self.saveFile = open(r'%s' % (self.savePath), "r+")  # opens in append-and-read mode 
-            count = 0
-            newtime = 0
-            while True: # read existing data to graph 
-              count += 1
-              line = self.saveFile.readline()
-              if line == '\n': # skips the blank lines
-                continue
-              elif line == '':  # for eof
-                break
-              else: # lines with data
-                line.strip() # take the newline off so it doesn't become its own, empty list item
-                linearr = line.split(',')
-                linearr = [float(i) for i in linearr]
-                    # line[4], line[5] are cat, an 
-                    # line[7] is ts (time (seconds)) 
-                    # line[13] - line[16] are cat_ll, cat_ul, an_ll, an_ul
-                if count == 1:
-                    newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data in Unix time
-                ts = linearr[7] - (126144000.0 + 2208988800.0)
-                self.xar.append( (ts - newtime) / 3600)
-                tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
-                self.yar.append(tau_e)
-                upper_bound = -(81.9 - 10.0) / np.log(linearr[16] / linearr[13])
-                lower_bound = -(81.9 - 10.0) / np.log(linearr[15] / linearr[14])
-                self.el.append(tau_e - lower_bound)
-                self.eh.append(upper_bound - tau_e)
-            self.start_time = newtime # extending the time backwards to accomodate old data so graph renders correctly 
-            # bumping the display clock back to match 
-            self.startTime.config(state='normal')
-            self.startTime.delete(1.0, tk.END)
-            self.startTime.insert('1.0',time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(newtime)))
-            self.startTime.config(state='disabled')
-            
-            self.scheduThread.start()
-        if state == 'overwrite':
-            self.control() 
-
-            print("Opening in overwrite mode")
-            self.saveFile = open(r'%s' % (self.savePath), "w+")  # deletes and overwrites old data
-            self.scheduThread.start()
-        else:
-            # cancel. go back to the start screen to enter a new file and try again
+        global in_progress
+        if in_progress == True : # stops the program from trying to start if it's already running
+            tk.messagebox.showerror(title="Error", message='Run already in progress')
             return
+        in_progress = True
+        self.savePath=self.fileSaveInput.get('1.0', 'end-1c')
+        if os.path.isfile(self.savePath): # if file exists, check for start mode 
+            state = appendBox(self.parent)
+ 
+            if state == 'append':
+                if self.ctr == 0 :
+                    if self.scheduThread.is_alive() == False :
+                        self.control() 
+
+                print("Opening in append mode")
+                self.saveFile = open(r'%s' % (self.savePath), "r+")  # opens in append-and-read mode 
+                count = 0
+                newtime = 0
+                while True: # read existing data to graph 
+                    self.ctr = count
+                    count += 1
+                    line = self.saveFile.readline()
+                    if line == '\n': # skips the blank lines
+                        continue
+                    elif line == '':  # for eof
+                        break
+                    else: # lines with data
+                        line.strip() # take the newline off so it doesn't become its own, empty list item
+                        linearr = line.split(',')
+                        linearr = [float(i) for i in linearr]
+                        # line[4], line[5] are cat, an 
+                        # line[7] is ts (time (seconds)) 
+                        # line[13] - line[16] are cat_ll, cat_ul, an_ll, an_ul
+                    if count == 1:
+                        newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data in Unix time
+                    ts = linearr[7] - (126144000.0 + 2208988800.0)
+                    self.xar.append( (ts - newtime) / 3600)
+                    tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
+                    self.yar.append(tau_e)
+                    upper_bound = -(81.9 - 10.0) / np.log(linearr[16] / linearr[13])
+                    lower_bound = -(81.9 - 10.0) / np.log(linearr[15] / linearr[14])
+                    self.el.append(tau_e - lower_bound)
+                    self.eh.append(upper_bound - tau_e)
+                    self.maxIR.append( linearr[8] )
+                    self.maxUV.append( linearr[9] )
+                    self.figure2.axes[0].cla()
+                    self.figure1.axes[0].cla()
+                    self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='o',mec='r',mfc='None')
+                    self.laserX.append(self.xar[-1])
+                    self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
+                    self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
+                    self.plt1.set_title("Most recent waveform")
+                    self.plt1.set_ylabel("MilliVolts")
+                    self.plt1.set_xlabel(u"Time (\u03bcs)")
+                    self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+                    self.plt2.set_ylabel('$\\tau$($\mu$s)')
+                    self.plt2.set_xlabel('Time (h)')
+                    self.canvas1.draw_idle()
+                    self.canvas2.draw_idle()
+                self.start_time = newtime # extending the time backwards to accomodate old data so graph renders correctly 
+                # bumping the display clock back to match 
+                self.startTime.config(state='normal')
+                self.startTime.delete(1.0, tk.END)
+                self.startTime.insert('1.0',time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(newtime)))
+                self.startTime.config(state='disabled')
+                if self.scheduThread.is_alive() == False :
+                    self.scheduThread.start()
+            if state == 'overwrite':
+                if self.ctr == 0 :
+                    if self.scheduThread.is_alive() == False :
+                        self.control() 
+
+                print("Opening in overwrite mode")
+                self.saveFile = open(r'%s' % (self.savePath), "w+")  # deletes and overwrites old data
+                self.xar = []
+                self.yar = []
+                self.el = []
+                self.eh = []
+                self.maxIR = []
+                self.maxUV = []
+                self.laserX = []
+                self.dataToFile = np.zeros(17)
+                self.t = []
+                self.figure2.axes[0].cla()
+                self.figure1.axes[0].cla()
+                self.plt1.set_title("Most recent waveform")
+                self.plt1.set_ylabel("MilliVolts")
+                self.plt1.set_xlabel(u"Time (\u03bcs)")
+                self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+                self.plt2.set_ylabel('$\\tau$($\mu$s)')
+                self.plt2.set_xlabel('Time (h)')
+                self.canvas1.draw_idle()
+                self.canvas2.draw_idle()
+                if self.ctr == 0 :
+                    if self.scheduThread.is_alive() == False :
+                        self.scheduThread.start()
+            else:
+                # cancel. go back to the start screen to enter a new file and try again
+                return
         
-      else:  
+        else:  
         # if file does not already exist
-        self.control() 
-        print("Creating file")
-        self.saveFile = open(r'%s' % (self.savePath), "w+") 
-        self.scheduThread.start()
+            if self.ctr == 0:
+                if self.scheduThread.is_alive() == False :
+                    self.control()
+            print("Creating file")
+            self.saveFile = open(r'%s' % (self.savePath), "w+") 
+            if self.ctr == 0 :
+                if self.scheduThread.is_alive() == False :
+                    self.scheduThread.start()
+        in_progress = True
 
 
     def __init__(self, parent):
@@ -741,33 +789,74 @@ class grafit(tk.Frame):
         self.yar = []
         self.el = []
         self.eh = []
+        self.maxIR = []
+        self.maxUV = []
+        self.laserX = []
+        self.dataToFile = np.zeros(17)
+        self.t = []
 	
-	    # seconds to wait between captures
+	# seconds to wait between captures
+        self.dummyspacer3 = tk.Label(height=1,width=1)
+        self.dummyspacer3.config(text=' ')
+        self.dummyspacer3.config(bg=parent['background'])
+        self.dummyspacer3.grid(row=18,column=0)
         self.waitT_label = tk.Label(height=1, width=30)
         self.waitT_label.config(text="Seconds to wait between captures")
-        self.waitT_label.grid(row=18, column=1)
+        self.waitT_label.grid(row=18, column=1, sticky = tk.E)
 
         # seconds to wait input 
         defaultTime = tk.StringVar(self.parent)
         defaultTime.set('33.0')  ### 33.0
         self.waitT_input = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', textvariable=defaultTime)
-        self.waitT_input.grid(row=19, column=1)
+        self.waitT_input.grid(row=19, column=1, sticky=tk.W)
 
         # next two lines are for the texbox for entries
-        self.fileSaveInput = tk.Text( height=1, width=24, bg='gray') # text box( where user enters path)
-        self.fileSaveInput.insert(tk.END,'testData')
-        self.fileSaveInput.grid( row=24, column=1)
+        self.fileSaveInput = tk.Text( height=3, width=24) # text box( where user enters path)
+        self.fileSaveInput.insert(tk.END,os.getcwd() + os.sep + 'xpm_fitter_data' + os.sep + 'testData')
+        self.fileSaveInput.grid( row=24, column=1, sticky=tk.W)
 
-        # button to commit the save path ( technically starts before)
-        self.commitLocationButton = tk.Button(text="Start", command=lambda:self.set_saveFile())
-        self.commitLocationButton.grid(row=24, column=2)
+        # the scope IP address LABEL
+        self.scopeIPLabel = tk.Label(height=1, width=24)
+        self.scopeIPLabel.config(text='Scope IP Address')
+        self.scopeIPLabel.grid( row = 30 , column=1, sticky=tk.W)
+        # the scope IP address TEXT
+        self.scopeIPText = tk.Text( height=1, width=18 )
+        self.scopeIPText.insert(tk.END, '134.79.229.21')
+        self.scopeIPText.grid( row=31, column=1,sticky=tk.W)
+        self.scopeIPText.tag_add('rightjust',1.0,tk.END)
+        self.scopeIPText.tag_config('rightjust',justify=tk.RIGHT)
+        
+        self.dummyspacer11 = tk.Label(height=1,width=1)
+        self.dummyspacer11.config(text=' ')
+        self.dummyspacer11.config(bg=parent['background'])
+        self.dummyspacer11.grid(row=32,column=0)
+        # 'Start' button starts a run
+        self.StartButton = tk.Button(text="Start", command=lambda:self.set_saveFile())
+        self.StartButton.grid(row=34, column=1)
+        self.dummyspacer12 = tk.Label(height=1,width=1)
+        self.dummyspacer12.config(text=' ')
+        self.dummyspacer12.config(bg=parent['background'])
+        self.dummyspacer12.grid(row=36,column=0)
+
+        # 'End' button ends a run
+        self.EndButton = tk.Button(text="End", command=lambda:self.end_it())
+        self.EndButton.grid(row=38, column=1)
 
         # positioning of the graphs
-        self.figure1 = Figure(figsize=(4, 4), dpi=100)
-        self.figure2 = Figure(figsize=(4, 4), dpi=100)
+        self.figure1 = Figure(figsize=(5, 4), dpi=100)
+        self.figure2 = Figure(figsize=(5, 4), dpi=100)
 
         self.plt1 = self.figure1.add_subplot(111)
+        self.plt1.set_title("Most recent waveform")
+        self.plt1.set_ylabel("MilliVolts")
+        self.plt1.set_xlabel(u"Time (\u03bcs)")
+        #self.figure1.tight_layout()
+
         self.plt2 = self.figure2.add_subplot(111)
+        self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+        self.plt2.set_ylabel('$\\tau$($\mu$s)')
+        self.plt2.set_xlabel('Time (h)')
+        #self.figure2.tight_layout()
 
         self.canvas1 = FigureCanvasTkAgg(self.figure1, master=self.parent)
         self.canvas2 = FigureCanvasTkAgg(self.figure2, master=self.parent)
@@ -787,6 +876,11 @@ class grafit(tk.Frame):
         self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
         self.currentStatus.config(state='disabled')
         self.currentStatus.grid( row=71, column=16, columnspan=10)
+
+        self.dummyspacer8 = tk.Label(height=1,width=1)
+        self.dummyspacer8.config(text=' ')
+        self.dummyspacer8.config(bg=parent['background'])
+        self.dummyspacer8.grid(row=71,column=27)
         
         now = datetime.now()
         self.currentTime = tk.Text(height=1, width=21, bg='white',fg='#7393B3', wrap='none')  # current time / time the interface was launched
@@ -810,24 +904,43 @@ class grafit(tk.Frame):
         self.startTime.config(state='disabled')
         self.startTime.grid( row=71, column=5, columnspan=3, sticky = tk.W)
 
+        self.dummyspacer5 = tk.Label(height=1,width=1)
+        self.dummyspacer5.config(text=' ')
+        self.dummyspacer5.config(bg=parent['background'])
+        self.dummyspacer5.grid(row=72,column=5)
+
+        self.IRLabel = tk.Label( height =1, width=12 )
+        self.IRLabel.config(text='IR signal [mV]')
+        self.IRLabel.grid(row=73,column=6, sticky=tk.E)
+        self.IRtext = tk.Text(height=1, width=12 )
+        self.IRtext.insert(tk.END,'0.00')
+        self.IRtext.grid(row=74,column=6, sticky=tk.E)
+
+        self.UVLabel = tk.Label( height =1, width=12 )
+        self.UVLabel.config(text='UV signal [mV]')
+        self.UVLabel.grid(row=73,column=8,sticky=tk.W)
+        self.UVtext = tk.Text(height=1, width=12 )
+        self.UVtext.insert(tk.END,'0.00')
+        self.UVtext.grid(row=74,column=8,sticky=tk.W)
+
         self.dummyspacer2 = tk.Label(height=1,width=1)
         self.dummyspacer2.config(text=' ')
         self.dummyspacer2.config(bg=parent['background'])
-        self.dummyspacer2.grid(row=72,column=5)
+        self.dummyspacer2.grid(row=75,column=5)
         
         #Stats Info Display 
         self.eventNumName = tk.Label(height=1, width=6)
         self.eventNumName.config(text='Event# ')
         self.eventNumName.grid(row=65, column=5, sticky=tk.E)
-        self.eventNumLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.eventNumLabel = tk.Text(height=1, width=12, wrap='none') 
         self.eventNumLabel.insert(1.0,str(0))
         self.eventNumLabel.config(state='disabled')
         self.eventNumLabel.grid(row=65, column=6)
         
-        self.lifetimeName = tk.Label(height=1, width=6)
+        self.lifetimeName = tk.Label(height=1, width=7)
         self.lifetimeName.config(text='Lifetime')
         self.lifetimeName.grid(row=65, column=7)
-        self.lifetimeLabel = tk.Text(height=1, width=11, wrap='none') 
+        self.lifetimeLabel = tk.Text(height=1, width=12, wrap='none') 
         self.lifetimeLabel.insert(1.0,'0.00')
         self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
         self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
@@ -836,63 +949,62 @@ class grafit(tk.Frame):
         self.lifeErrorsTxt = tk.Text(height=2, width=8, font=Font(size=6))  
         self.lifeErrorsTxt.insert(1.0,'0.000\n0.000')
         self.lifeErrorsTxt.grid(row=65,column=9,sticky=tk.W)
-
-        self.cathodeName = tk.Label(height=1, width=6)
-        self.cathodeName.config(text='Cathode')
-        self.cathodeName.grid(row=65, column=10)
-        self.cathodeLabel = tk.Text(height=1, width=8, wrap='none') 
-        self.cathodeLabel.insert(1.0,'0.00')
-        self.cathodeLabel.config(state='disabled')
-        self.cathodeLabel.grid(row=65, column=11)
         
         self.anodeName = tk.Label(height=1, width=6)
         self.anodeName.config(text='Anode')
         self.anodeName.grid(row=66, column=5, sticky=tk.E)
-        self.anodeLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.anodeLabel = tk.Text(height=1, width=12, wrap='none') 
         self.anodeLabel.insert(1.0,'0.00')
         self.anodeLabel.config(state='disabled')
         self.anodeLabel.grid(row=66, column=6)
         
-        self.tcName = tk.Label(height=1, width=6)
+        self.tcName = tk.Label(height=1, width=7)
         self.tcName.config(text='Tc')
         self.tcName.grid(row=66, column=7)
-        self.tcLabel = tk.Text(height=1, width=11, wrap='none') 
+        self.tcLabel = tk.Text(height=1, width=12, wrap='none') 
         self.tcLabel.insert(1.0,'10.0')
         self.tcLabel.config(state='disabled')
         self.tcLabel.grid(row=66, column=8, sticky=tk.W)
+
+        self.cathodeName = tk.Label(height=1, width=6)
+        self.cathodeName.config(text='Cathode')
+        self.cathodeName.grid(row=65, column=10)
+        self.cathodeLabel = tk.Text(height=1, width=10, wrap='none') 
+        self.cathodeLabel.insert(1.0,'0.00')
+        self.cathodeLabel.config(state='disabled')
+        self.cathodeLabel.grid(row=65, column=11)
         
         self.tcriseName = tk.Label(height=1, width=6)
         self.tcriseName.config(text='Tcrise')
         self.tcriseName.grid(row=66, column=10)
-        self.tcriseLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.tcriseLabel = tk.Text(height=1, width=10, wrap='none') 
         self.tcriseLabel.insert(1.0,'1.0')
         self.tcriseLabel.config(state='disabled')
         self.tcriseLabel.grid(row=66, column=11)
         
-        self.taName = tk.Label(height=1, width=6)
-        self.taName.config(text='Ta')
-        self.taName.grid(row=67, column=5, sticky=tk.E)
-        self.taLabel = tk.Text(height=1, width=8, wrap='none') 
-        self.taLabel.insert(1.0,'81.9')
-        self.taLabel.config(state='disabled')
-        self.taLabel.grid(row=67, column=6)
-        
-        self.tariseName = tk.Label(height=1, width=6)
-        self.tariseName.config(text='Tarise')
-        self.tariseName.grid(row=67, column=7)
-        self.tariseLabel = tk.Text(height=1, width=11, wrap='none') 
-        self.tariseLabel.insert(1.0,'2.9')
-        self.tariseLabel.config(state='disabled')
-        self.tariseLabel.grid(row=67, column=8, sticky=tk.E)
-        
         self.offsetName = tk.Label(height=1, width=6)
         self.offsetName.config(text='Offset  ')
         self.offsetName.grid(row=67, column=10)
-        self.offsetLabel = tk.Text(height=1, width=8, wrap='none') 
+        self.offsetLabel = tk.Text(height=1, width=10, wrap='none') 
         self.offsetLabel.insert(1.0,'0.00')
         self.offsetLabel.config(state='disabled')
         self.offsetLabel.grid(row=67, column=11)
         
+        self.taName = tk.Label(height=1, width=6)
+        self.taName.config(text='Ta')
+        self.taName.grid(row=67, column=5, sticky=tk.E)
+        self.taLabel = tk.Text(height=1, width=12, wrap='none') 
+        self.taLabel.insert(1.0,'81.9')
+        self.taLabel.config(state='disabled')
+        self.taLabel.grid(row=67, column=6)
+        
+        self.tariseName = tk.Label(height=1, width=7)
+        self.tariseName.config(text='Tarise')
+        self.tariseName.grid(row=67, column=7)
+        self.tariseLabel = tk.Text(height=1, width=12, wrap='none') 
+        self.tariseLabel.insert(1.0,'2.9')
+        self.tariseLabel.config(state='disabled')
+        self.tariseLabel.grid(row=67, column=8, sticky=tk.E)
         
         """self.offsetName = tk.Label(height=1, width=6)
         self.offsetName.config(text='Offset  ')
@@ -927,7 +1039,7 @@ class onlineXPMFitter(tk.Tk):
 
         # Set title and screen resolutions
         tk.Tk.wm_title(self, 'XPM Fitter')
-        tk.Tk.minsize(self, width=840, height=520)
+        tk.Tk.minsize(self, width=1640, height=530)
         # Optional TODO: Set a custom icon for the XPM application
         # tk.Tk.iconbitmap(self, default="[example].ico")
 
