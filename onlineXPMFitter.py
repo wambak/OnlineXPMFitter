@@ -200,7 +200,7 @@ class grafit(tk.Frame):
             self.maxIR.append( self.dataToFile[8] )
             self.maxUV.append( self.dataToFile[9] )
             self.figure2.axes[0].cla()
-            self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='o',mec='r',mfc='None')
+            self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='^',mec='r',mfc='None')
             self.laserX.append(self.xar[-1])
             self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
             self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
@@ -268,7 +268,7 @@ class grafit(tk.Frame):
                     b = result.best_values
                     ci_txt = result.ci_report()
 
-                # print('results--->', result.ci_out)
+                print('results--->')
                 catrow = (ci_txt.split('\n')[1].split(':')[1])
                 anrow = (ci_txt.split('\n')[2].split(':')[1])
                 cat = b['cat']
@@ -279,6 +279,12 @@ class grafit(tk.Frame):
                 an_ll = an + np.fromstring(anrow,dtype=float,sep=' ')[2]
                 an_ul = an + np.fromstring(anrow,dtype=float,sep=' ')[4]
                 #print(ci_txt)
+                if an_ul > cat_ll : #unphysical territory
+                    an = an_ll
+                    cat = cat_ul    #force tau to be computed as a lower limit
+                    an_ul = cat
+                    cat_ll = cat
+                print( catrow , anrow , cat, an)
 
                 tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
 
@@ -297,13 +303,12 @@ class grafit(tk.Frame):
                 self.xar.append((time.time() - self.start_time) / 3600)
                 ts = self.xar[-1]*3600.0 + self.start_time  
                 self.dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
-                tau_e = (81.9 - 10.0) / np.log(self.dataToFile[4] / self.dataToFile[5])
-                tau_e = round(tau_e,1)
+                tau_e = (81.9 - 10.0) / np.log( cat / an )
                 print('cat and an', self.dataToFile[4], self.dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
                 self.yar.append(tau_e)
 
-                upper_bound = -(81.9 - 10.0) / np.log(an_ul / cat_ll)
-                lower_bound = -(81.9 - 10.0) / np.log(an_ll / cat_ul)
+                upper_bound = (81.9 - 10.0) / np.log( cat_ll / an_ul )
+                lower_bound = (81.9 - 10.0) / np.log( cat_ul / an_ll )
 
                 # we are appending the data to the row which will be written to the file
                 self.dataToFile[13] = float(cat_ll) 
@@ -348,7 +353,7 @@ class grafit(tk.Frame):
 
                 self.lifetimeLabel.config(state='normal')
                 self.lifetimeLabel.delete(1.0, tk.END)
-                self.lifetimeLabel.insert(1.0,(str(tau_e)))
+                self.lifetimeLabel.insert(1.0,str(round((81.9 - 10.0) / np.log( dataToFile[4] / dataToFile[5] ),1)) )
                 self.lifeErrorsTxt.delete(1.0, tk.END)
                 self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
                 #('+'++'-'+str(tau_e-lower_bound)
@@ -435,15 +440,18 @@ class grafit(tk.Frame):
             return
             #os._exit(0)
 
+    def togglefibersave(self):
+        global isfibersave
+        isfibersave = ( self.fibersaveval == 1 )
+        return
+
+
+
     def end_it(self):
         global in_progress
         global total
         if in_progress == False :
             return
-        dwellclosed = 32.0 ### 32.0
-        dwellopen = float(self.waitT_input.get())
-        fibersavetime = 10800.0 #for fibersave
-        tbc = dwellclosed
         events_remaining = len( schedule.queue )
         print('Progress',events_remaining)
         total = 0.0
@@ -459,6 +467,7 @@ class grafit(tk.Frame):
         self.ctr = 0
 
         self.scheduThread = threading.Thread(target=startSchedule)
+        self.scheduThread.daemon = True
 
         in_progress = False
 
@@ -526,7 +535,7 @@ class grafit(tk.Frame):
             global total
             dwellclosed = 32.0 ### 32.0
             dwellopen = float(self.waitT_input.get())
-            fibersavetime = 10800.0 #for fibersave
+            fibersavetime = float(self.fibersavesb.get())  #for fibersave
             tbc = dwellclosed
             tf = 0 
             if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) :
@@ -598,6 +607,15 @@ class grafit(tk.Frame):
                 self.saveFile = open(r'%s' % (self.savePath), "r+")  # opens in append-and-read mode 
                 count = 0
                 newtime = 0
+                self.xar = []
+                self.yar = []
+                self.el = []
+                self.eh = []
+                self.maxIR = []
+                self.maxUV = []
+                self.laserX = []
+                self.dataToFile = np.zeros(17)
+                self.t = []
                 while True: # read existing data to graph 
                     self.ctr = count
                     count += 1
@@ -627,7 +645,7 @@ class grafit(tk.Frame):
                     self.maxUV.append( linearr[9] )
                     self.figure2.axes[0].cla()
                     self.figure1.axes[0].cla()
-                    self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='o',mec='r',mfc='None')
+                    self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='^',mec='r',mfc='None')
                     self.laserX.append(self.xar[-1])
                     self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
                     self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
@@ -805,9 +823,9 @@ class grafit(tk.Frame):
         self.waitT_label.grid(row=18, column=1, sticky = tk.E)
 
         # seconds to wait input 
-        defaultTime = tk.StringVar(self.parent)
-        defaultTime.set('33.0')  ### 33.0
-        self.waitT_input = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', textvariable=defaultTime)
+        self.defaultTime = tk.StringVar(self.parent)
+        self.defaultTime.set('33.0')  ### 33.0
+        self.waitT_input = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = 33.0 , to = 10800.0 , textvariable = self.defaultTime)
         self.waitT_input.grid(row=19, column=1, sticky=tk.W)
 
         # next two lines are for the texbox for entries
@@ -876,6 +894,16 @@ class grafit(tk.Frame):
         self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
         self.currentStatus.config(state='disabled')
         self.currentStatus.grid( row=71, column=16, columnspan=10)
+        
+        self.fibersaveval = tk.IntVar(value=1)
+        self.fibersavecheck = tk.Checkbutton( text ='Fiber-saving mode' , command = self.togglefibersave, variable=self.fibersaveval, onvalue=1, offvalue=0)
+        self.fibersavecheck.grid( row = 73, column = 16 )
+        self.fstimestr = tk.StringVar(value='10800.0')
+        self.fibersavesb = tk.Spinbox( self.parent , width = 34 , increment=1.0 , foreground='black', background='white', from_ = 33.0 , to = 259200.0 , textvariable = self.fstimestr )
+        self.fibersavesb.grid( row = 73, column = 19 , sticky = tk.W )
+        self.fibersavelabel = tk.Label(height=1,width=24)
+        self.fibersavelabel.config(text='Closed-shutter time [s]')
+        self.fibersavelabel.grid(row=73,column=17, sticky=tk.E)
 
         self.dummyspacer8 = tk.Label(height=1,width=1)
         self.dummyspacer8.config(text=' ')
@@ -1039,7 +1067,7 @@ class onlineXPMFitter(tk.Tk):
 
         # Set title and screen resolutions
         tk.Tk.wm_title(self, 'XPM Fitter')
-        tk.Tk.minsize(self, width=1640, height=530)
+        tk.Tk.minsize(self, width=1480, height=530)
         # Optional TODO: Set a custom icon for the XPM application
         # tk.Tk.iconbitmap(self, default="[example].ico")
 
