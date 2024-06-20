@@ -18,7 +18,7 @@ try:
         scope.open(device_data)
 
         # set up triggering on scope channel 1
-        scope.trigger(device_data, enable=True, source=scope.trigger_source.analog, channel=1, level=0)
+        scope.trigger(device_data, enable=True, source=scope.trigger_source.analog, channel=2, level=0)
 
         # generate a 10KHz sine signal with 2V amplitude on channel 1
         wavegen.generate(device_data, channel=1, function=wavegen.function.sine, offset=0, frequency=10e03, amplitude=2)
