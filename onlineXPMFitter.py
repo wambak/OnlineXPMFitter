@@ -24,7 +24,7 @@ import sched
 from datetime import datetime
 from WF_SDK import device, scope, wavegen
 try:
-  device_data = device.open()     #if the AD2 is connected
+  device_data = device.open('Analog Discovery 2')     #if the AD2 is connected
   is_connected = True
   print('AD2 connected')
 except:     # if it isn't, we want to ignore the code that handles it. i would make this nicer if i could find the wf_sdk docs
@@ -74,6 +74,10 @@ def closeshutter(text,dwell) :  #energizing
               amplitude=0.02) # on for good this time
             time.sleep(listoftimes[index])
       energized = True # this happens regardless of connection
+  baseurl = 'http://' + str(root.graph.scopeIPText.get('1.0','end-1c'))
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+  time.sleep(0.25)
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
   return
 
 def openshutter(text,dwell) :   #deenergizing
@@ -87,7 +91,7 @@ def openshutter(text,dwell) :   #deenergizing
     if pathExists == True:
       Path('/tmp/.shutterclosed').unlink()
 
-      # deenergizing - adapted from shutterGUI.py
+  # deenergizing - adapted from shutterGUI.py
   if energized:
       print('De-energizing')
       if is_connected: # if AD2 is connected and the shutter is closed
@@ -103,6 +107,10 @@ def openshutter(text,dwell) :   #deenergizing
             amplitude=0.02) # off for good this time
           time.sleep(listoftimes[index])
       energized=False
+  baseurl = 'http://' + str(root.graph.scopeIPText.get('1.0','end-1c'))
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+  time.sleep(0.25)
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
   return
 
 
@@ -157,28 +165,28 @@ class grafit(tk.Frame):
         if islaser : #Handle the laser traces
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH2' ).read()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            myurl = baseurl + '/?COMMAND=wfmpre?'
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            myurl = baseurl + '/?COMMAND=curve?'
             f = urllib.request.urlopen( myurl )
             data = f.read().decode()
             wfm = [float(u) for u in data.split(',')]
-            peak1volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            peak1volt = [ (float(dl) - float(wfmpre.split(';')[14])) * 1.0e1 * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13]) for dl in wfm]
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH3' ).read()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            myurl = baseurl + '/?COMMAND=wfmpre?'
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            myurl = baseurl + '/?COMMAND=curve?'
             f = urllib.request.urlopen( myurl )
             data = f.read().decode()
             wfm = [float(u) for u in data.split(',')]
-            peak2volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            peak2volt = [ (float(dl) - float(wfmpre.split(';')[14])) * 1.0e1 * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13]) for dl in wfm]
             self.dataToFile[0] = 10.0
             self.dataToFile[1] = 81.9
             self.dataToFile[2] = 1.0
@@ -212,11 +220,14 @@ class grafit(tk.Frame):
             writer.writerows([self.dataToFile])
             fh.close()
             self.ctr += 1
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH1' ).read()
         else :
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH1' ).read()
             data = ''
             myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
@@ -228,7 +239,7 @@ class grafit(tk.Frame):
             wfm = [float(u) for u in data.split(',')]
 
             # CALLING WFMPRE TO CONVERT WFM TO MS AND VOLTS
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            myurl = baseurl + '/?COMMAND=wfmpre?'
             print(myurl)
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
@@ -247,7 +258,6 @@ class grafit(tk.Frame):
                 self.topHat = np.array(wfm)
 
                 # Waveform to plot
-                print(len(self.topHat), len(self.nontopHat))
                 wvPlot = self.topHat - self.nontopHat
                 wvPlot = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(wfmpre.split(';')[13])) for dl in wvPlot]
                 if self.isStandard :
@@ -318,7 +328,6 @@ class grafit(tk.Frame):
 
                 self.el.append(tau_e - lower_bound)
                 self.eh.append(upper_bound - tau_e)
-
                 self.figure1.axes[0].cla()
 
                 # PLOTTTING PEAKS:
@@ -353,7 +362,7 @@ class grafit(tk.Frame):
 
                 self.lifetimeLabel.config(state='normal')
                 self.lifetimeLabel.delete(1.0, tk.END)
-                self.lifetimeLabel.insert(1.0,str(round((81.9 - 10.0) / np.log( dataToFile[4] / dataToFile[5] ),1)) )
+                self.lifetimeLabel.insert(1.0,str(round((81.9 - 10.0) / np.log( self.dataToFile[4] / self.dataToFile[5] ),1)) )
                 self.lifeErrorsTxt.delete(1.0, tk.END)
                 self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
                 #('+'++'-'+str(tau_e-lower_bound)
@@ -381,7 +390,8 @@ class grafit(tk.Frame):
                 self.plt1.set_xlabel(u"Time (\u03bcs)")
             else:
                 self.nontopHat = np.array(wfm)
-
+            
+        print('drawing idle')
         self.canvas1.draw_idle()
         self.canvas2.draw_idle()
         # here we check if the save file has been defined, if so write to it, if not state that it is not set
@@ -406,7 +416,9 @@ class grafit(tk.Frame):
                 ct = int((schedule.queue[0].time - time.time())*100)
                 #print(ct)
             if len( schedule.queue[0].argument[0] ) > 1 and ct > 0 :    
-                #print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
+                #print('schedule length',len(schedule.queue))
+                print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
+                    
                 # Current State update, works exactly identical to the rest of the label updates in plotit()
                 self.currentStatus.config(state='normal')
                 self.currentStatus.delete(1.0,tk.END)
@@ -422,9 +434,10 @@ class grafit(tk.Frame):
             if len( schedule.queue ) == 0 :
                 print('Schedule is depopulated')
         except Exception as exc:
-            for event in schedule.queue :
-                schedule.cancel(event)
-            self.saveFile.close()
+            print(exc)
+            #for event in schedule.queue :
+            #    schedule.cancel(event)
+            #self.saveFile.close()
             #openshutter('',0.0)
             #os._exit(0)
         self.parent.after(1000,self.ud)
@@ -538,7 +551,7 @@ class grafit(tk.Frame):
             fibersavetime = float(self.fibersavesb.get())  #for fibersave
             tbc = dwellclosed
             tf = 0 
-            if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) :
+            if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 6  and root.graph.ctr > 0 ) :
                 print( 'length of queue',len( schedule.queue ) )
                 for iii in range(0,10) :
                     iodelay = 12
@@ -546,47 +559,49 @@ class grafit(tk.Frame):
                     #print(text)
                     if isfibersave and root.graph.ctr > 0 and iii == 0 : 
                         text = '*Fiber-saving mode: ---SHUTTER CLOSED--- resume in '
-                    schedule.enter( total, 1, closeshutter, argument=(text,1.0) ) 
+                    schedule.enter( total, 1, closeshutter, argument=(text,5.0) ) 
                     text = '*Acquisition mode ---SHUTTER CLOSED--- capture background trace in '
                     #if isfibersave and root.graph.ctr > 0 :
                     #  text = '*Fiber-saving mode: ---SHUTTER CLOSED--- next acquisition in '
-                    total = total + 1 + dwellclosed
-                    schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellclosed) )
+                    total = total + 5 + dwellclosed
+                    schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellclosed+5) )
                     #total = total + iodelay
-                    total = total + 1 
+                    total = total + 5 
                     text = '*Capturing (signal+background) ---OPENING SHUTTER--- '
-                    schedule.enter( total, 1, openshutter, argument=(text,1.0) )
+                    schedule.enter( total, 1, openshutter, argument=(text,5.0) )
                     text = 'Acquisition mode ---SHUTTER OPEN--- capture (signal+background) in '
                     total = total + dwellopen 
                     schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellopen))
                     #text = 'Acquisition mode ---SHUTTER OPEN--- capturing laser traces '
-                    total = total + 32 
+                    total = total + 32 + 5
                     schedule.enter( total, 1, root.graph.plotit , argument = ('Getting IR, UV Laser traces ',32.0,True) )
                     #total = total + 1 
                     #schedule.enter( total, 1, root.graph.plotit , argument = ('Getting UV Laser trace ',1.0,True) )
                     if isfibersave and iii == 9 : 
                         text = '*Fiber-saving mode: ---CLOSING SHUTTER--- '
                         #print(text)
-                        total = total + 1 
-                        schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
+                        total = total + 5 
+                        schedule.enter( total, 1, closeshutter, argument=(text,5.0) )
                         total = total + fibersavetime
                     else : 
-                        total = total + 1 
+                        total = total + 5
                         text = '*Acquisition mode ---CLOSING SHUTTER--- preparing next acquisition '
-                        schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
+                        schedule.enter( total, 1, closeshutter, argument=(text,5.0) )
                         total = total + tbc 
                 #print('schedule has '+str( len(schedule.queue) ))
                 if isfibersave : 
-                    total = fibersavetime
+                    total = total+fibersavetime
                 else :
-                    total = tbc
+                    total = total+tbc
+                print(schedule.queue)
         except Exception as exc :
+            print(exc)
             for event in schedule.queue :
                 print( event )
                 schedule.cancel(event)
             self.saveFile.close()
             #os._exit(0)
-        self.parent.after(10, self.control) 
+        self.parent.after(5, self.control) 
 
     def set_saveFile(self):
         global in_progress
