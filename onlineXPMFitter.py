@@ -163,12 +163,6 @@ class grafit(tk.Frame):
     def plotit(self,  text='' , dwell=0.0 , islaser=False ):
         baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
         if islaser : #Handle the laser traces
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
-            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
-            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH2' ).read()
             myurl = baseurl + '/?COMMAND=wfmpre?'
             f2 = urllib.request.urlopen( myurl )
@@ -196,6 +190,8 @@ class grafit(tk.Frame):
                 lasermax = 0.0
             self.dataToFile[8] = round(lasermax,2) #IR
             lasermax = 100.0*max(peak2volt)
+            print([f'{dd:.4f}' for dd in peak2volt])
+            print(float(wfmpre.split(';')[12]),float(wfmpre.split(';')[13]),float(wfmpre.split(';')[14]),lasermax)
             if lasermax < 0 :
                 lasermax = 0.0
             self.dataToFile[9] = round(lasermax,2) #UV
@@ -388,6 +384,8 @@ class grafit(tk.Frame):
                 self.plt1.set_title("Most recent waveform")
                 self.plt1.set_ylabel("MilliVolts")
                 self.plt1.set_xlabel(u"Time (\u03bcs)")
+                urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+                urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
             else:
                 self.nontopHat = np.array(wfm)
             
@@ -434,7 +432,8 @@ class grafit(tk.Frame):
             if len( schedule.queue ) == 0 :
                 print('Schedule is depopulated')
         except Exception as exc:
-            print(exc)
+            pass
+            #print(exc)
             #for event in schedule.queue :
             #    schedule.cancel(event)
             #self.saveFile.close()
@@ -449,6 +448,8 @@ class grafit(tk.Frame):
             print("File closed")
             self.saveFile.close()
             openshutter('',0.0)
+            baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
         except Exception as exc:
             return
             #os._exit(0)
@@ -481,6 +482,8 @@ class grafit(tk.Frame):
 
         self.scheduThread = threading.Thread(target=startSchedule)
         self.scheduThread.daemon = True
+        baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
+        urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
 
         in_progress = False
 
@@ -593,7 +596,7 @@ class grafit(tk.Frame):
                     total = total+fibersavetime
                 else :
                     total = total+tbc
-                print(schedule.queue)
+                #print(schedule.queue)
         except Exception as exc :
             print(exc)
             for event in schedule.queue :
