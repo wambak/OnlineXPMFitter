@@ -23,7 +23,7 @@ elif sys.platform.startswith("darwin"):
 else:
     dwf = cdll.LoadLibrary("libdwf.so")
 
-
+lifetime = 500.0
 
 def doubleBiGaus(x, cat, an, offst):
     tc = 10.0
@@ -31,7 +31,6 @@ def doubleBiGaus(x, cat, an, offst):
     sig_c = 1.0
     sig_a = 1.0
     i_c = cat*np.exp(-((x-tc)**2)/(2*sig_c**2))
-    lifetime = 260.0
     adjusted_an = np.exp(-(ta-tc)/lifetime)*an 
     i_a = adjusted_an*np.exp(-((x-ta)**2)/(2*sig_a**2))
     return i_c - i_a + offst
@@ -88,7 +87,7 @@ wavparams['offst'].value = 0.0
 
 t = np.linspace(0.0,163.79,16380)
 t_ad2 = np.linspace(0.0,163.79e-6,16380)
-print((t[-1]),(t_ad2[-1]))
+print('ground-truth e- lifetime [us]',lifetime)
 
 v_of_t = wavmodel.eval(wavparams,x=t)
 
