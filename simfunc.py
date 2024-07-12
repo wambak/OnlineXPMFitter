@@ -14,6 +14,19 @@ from uncertainties.core import wrap
 
 lifetime = 2000.0
 
+
+def biGaus_skew(x,cat,sig_c,tau_c,sig_a,tau_a) :
+  tc = 10.0
+  ta = 81.9
+  i_c = cat*(erfc((tc-x)/sig_c))*np.exp(-(x-tc)/tau_c)
+  adjusted_an = np.exp(-(ta-tc)/lifetime)*cat
+  #i_a = (sig_c/sig_a)*adjusted_an*(erfc((ta-x)/sig_a))*np.exp(-(x-ta)/tau_a)
+  #i_a = (sig_c/sig_a)*adjusted_an*2.0/(1.0+np.exp((ta-x)/sig_a))*np.exp(-(x-ta)/tau_a)
+  i_a = -((sig_c+tau_c)/(sig_a+tau_a))*erfc((ta-x)/sig_a)*np.exp(-(x-ta)/(tau_a))*adjusted_an
+  return  i_c + i_a
+
+
+
 def doubleBiGaus(x, cat, an, offst):
     tc = 10.0
     ta = 81.9
@@ -47,18 +60,18 @@ def skewVoigtC_skewVoigtA_yesGamma (x, cat, sig_c, gam_c, skew_c, an, sig_a, ske
 
     return cathode + anode + offst
 
-wavmodel = Model(doubleBiGaus,nan_policy='raise')
-wavparams = wavmodel.make_params()
+#wavmodel = Model(doubleBiGaus,nan_policy='raise')
+#wavparams = wavmodel.make_params()
 #wavmodel = Model(skewVoigtC_skewVoigtA_yesGamma,nan_policy='raise')
 #wavparams = wavmodel.make_params()
-wavparams['cat'].value = 1.0   # formerly qc
+#wavparams['cat'].value = 1.0   # formerly qc
 #wavparams['sig_c'].value = 1.99877086
 #wavparams['gam_c'].value = 0.48781508
 #wavparams['skew_c'].value = 8.21680391
-wavparams['an'].value = 1.0     # formerly qa
+#wavparams['an'].value = 1.0     # formerly qa
 #wavparams['sig_a'].value = 0.76546294
 #wavparams['skew_a'].value = 2.81726754
-wavparams['offst'].value = 0.0
+#wavparams['offst'].value = 0.0
 
 #wavmodel = Model(skewVoigtC_skewVoigtA_yesGamma,nan_policy='raise')
 #wavparams = wavmodel.make_params()
@@ -70,6 +83,14 @@ wavparams['offst'].value = 0.0
 #wavparams['sig_a'].value = 0.76546294
 #wavparams['skew_a'].value = 2.81726754
 #wavparams['offst'].value = 0.0
+
+wavmodel = Model(biGaus_skew,nan_policy='raise')
+wavparams = wavmodel.make_params()
+wavparams['cat'].value = 1.0   # formerly qc
+wavparams['sig_c'].value = 2.3331900249976414
+wavparams['tau_c'].value = 1.9260917008369134
+wavparams['sig_a'].value = 1.5068445074484516
+wavparams['tau_a'].value = 1.3511128944360826
 
 t = np.linspace(0.0,163.79,16380)
 t_ad2 = np.linspace(0.0,163.79e-6,16380)
