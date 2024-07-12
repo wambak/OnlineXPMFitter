@@ -815,6 +815,9 @@ class grafit(tk.Frame):
             if self.ctr == 0 :
                 if self.scheduThread.is_alive() == False :
                     self.scheduThread.start()
+            self.figure2.axes[0].cla()
+            self.canvas2.draw_idle()
+            self.ctr = 0
         in_progress = True
 
 
