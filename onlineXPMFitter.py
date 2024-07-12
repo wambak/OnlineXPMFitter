@@ -204,6 +204,7 @@ class grafit(tk.Frame):
             self.UVtext.insert( 1.0, str(self.dataToFile[9]) )
             self.plt1.plot(self.t, peak1volt, 'm-')
             self.plt1.plot(self.t, peak2volt, 'c-')
+            self.plt1.grid(True)
             self.maxIR.append( self.dataToFile[8] )
             self.maxUV.append( self.dataToFile[9] )
             self.figure2.axes[0].cla()
@@ -215,6 +216,7 @@ class grafit(tk.Frame):
             self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
             self.plt2.set_ylabel('$\\tau$($\mu$s)')
             self.plt2.set_xlabel('Time (h)')
+            self.plt2.grid(True)
             try :
                 y_plot_option = self.y_plot_option.get()
                 if y_plot_option == 'Use limits' : 
@@ -318,8 +320,10 @@ class grafit(tk.Frame):
                 self.dataToFile[5] = round(float(an),3)
                 self.dataToFile[6] = round(float(offst),3)
                 self.dataToFile[10] = float(result.chisqr/result.nfree) #reduced chisq
-                self.dataToFile[11] = float(0.0)
-                self.dataToFile[12] = float(0.0)
+                numAvgstr = urllib.request.urlopen( baseurl + '/?COMMAND=ACQuire:NUMAVG?' ).read().decode()
+                self.dataToFile[11] = float(numAvgstr) #TODO: number in average
+                nTrigstr = urllib.request.urlopen( baseurl + '/?COMMAND=ACQuire:NUMACQ?' ).read().decode()
+                self.dataToFile[12] = float(nTrigstr) #TODO: number of triggers
 
                 self.xar.append((time.time() - self.start_time) / 3600)
                 ts = self.xar[-1]*3600.0 + self.start_time  
@@ -333,7 +337,7 @@ class grafit(tk.Frame):
                     print('!!!! Uphysical lifetime !!!')
                     a = an
                     delta_a = an - an_ll
-                    tau_lower_limit = (81.9-10.0)/np.log((a+delta_a)/a)
+                    tau_lower_limit = (81.9-10.0)/np.log((a+2*delta_a)/a)
                     delta_tau_h = (81.9 - 10.0) / np.log( cat_ll / an_ul ) - tau_e 
                     number_of_sigma = (tau_lower_limit-tau_e)/errorh #approximate number of sigma
                     errorl = 0.0
@@ -357,7 +361,7 @@ class grafit(tk.Frame):
                 # PLOTTING WAVEFORM:
                 # self.plt.subplot(212)
                 self.plt1.plot(self.t, wvPlot, 'g-')
-
+                self.plt1.grid(True) 
                 tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
             
                 if self.isStandard :
@@ -371,6 +375,7 @@ class grafit(tk.Frame):
                     #               tarise=b['tarise'], cent_a=b['cent_a'], gam_a=b['gam_a'],
                     #               gam_c=b['gam_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='proposed: an=42.04 mV')
                     self.plt1.plot(tfine, self.wavmodel.eval(x=tfine, cat=cat, an=an, sig_c=b['sig_c'], gam_c=b['gam_c'], sig_a=b['sig_a'], skew_c=b['skew_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='new voigt')
+                    self.plt1.grid(True)
 
                 #self.canvas2draw_idle()
 
@@ -749,6 +754,8 @@ class grafit(tk.Frame):
                     self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
                     self.plt2.set_ylabel('')#$\\tau$($\mu$s)')
                     self.plt2.set_xlabel('Time (h)')
+                    self.plt1.grid(True)
+                    self.plt2.grid(True)
                     self.canvas1.draw_idle()
                     self.canvas2.draw_idle()
                 self.start_time = newtime # extending the time backwards to accomodate old data so graph renders correctly 
@@ -791,6 +798,7 @@ class grafit(tk.Frame):
                         self.scheduThread.start()
             else:
                 # cancel. go back to the start screen to enter a new file and try again
+                in_progress = False
                 return
         
         else:  
@@ -963,6 +971,7 @@ class grafit(tk.Frame):
         self.plt1.set_title("Most recent waveform")
         self.plt1.set_ylabel("MilliVolts")
         self.plt1.set_xlabel(u"Time (\u03bcs)")
+        self.plt1.grid(True)
         #self.figure1.tight_layout()
 
         self.plt2 = self.figure2.add_subplot(111)
@@ -970,6 +979,7 @@ class grafit(tk.Frame):
         #self.plt2.set_title("$e^{-}$ Lifetime vs Time")
         self.plt2.set_ylabel('$\\tau$($\mu$s)')
         self.plt2.set_xlabel('Time (h)')
+        self.plt2.grid(True)
 
         self.y_plotLabel = tk.Label(height=1,width=14)
         self.y_plotLabel.config(text='Y-axis config',font='Helvetica 12 bold')
