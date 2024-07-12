@@ -23,8 +23,10 @@ from uncertainties.core import wrap
 import sched
 from datetime import datetime
 from WF_SDK import device, scope, wavegen
+from decimal import Decimal
+
 try:
-  device_data = device.open()     #if the AD2 is connected
+  device_data = device.open('Analog Discovery 2')     #if the AD2 is connected
   is_connected = True
   print('AD2 connected')
 except:     # if it isn't, we want to ignore the code that handles it. i would make this nicer if i could find the wf_sdk docs
@@ -37,6 +39,7 @@ eventList = []
 time0 = []
 volt0 = []
 isfibersave = True
+fibersavetime = 0.0
 total = 0.0
 energized = False   # SHOULD start as OFF by default
 in_progress = False
@@ -74,6 +77,10 @@ def closeshutter(text,dwell) :  #energizing
               amplitude=0.02) # on for good this time
             time.sleep(listoftimes[index])
       energized = True # this happens regardless of connection
+  baseurl = 'http://' + str(root.graph.scopeIPText.get('1.0','end-1c'))
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+  time.sleep(0.25)
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
   return
 
 def openshutter(text,dwell) :   #deenergizing
@@ -87,7 +94,7 @@ def openshutter(text,dwell) :   #deenergizing
     if pathExists == True:
       Path('/tmp/.shutterclosed').unlink()
 
-      # deenergizing - adapted from shutterGUI.py
+  # deenergizing - adapted from shutterGUI.py
   if energized:
       print('De-energizing')
       if is_connected: # if AD2 is connected and the shutter is closed
@@ -103,6 +110,10 @@ def openshutter(text,dwell) :   #deenergizing
             amplitude=0.02) # off for good this time
           time.sleep(listoftimes[index])
       energized=False
+  baseurl = 'http://' + str(root.graph.scopeIPText.get('1.0','end-1c'))
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+  time.sleep(0.25)
+  urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
   return
 
 
@@ -155,30 +166,24 @@ class grafit(tk.Frame):
     def plotit(self,  text='' , dwell=0.0 , islaser=False ):
         baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
         if islaser : #Handle the laser traces
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH2' ).read()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            myurl = baseurl + '/?COMMAND=wfmpre?'
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            myurl = baseurl + '/?COMMAND=curve?'
             f = urllib.request.urlopen( myurl )
             data = f.read().decode()
             wfm = [float(u) for u in data.split(',')]
-            peak1volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            peak1volt = [ (float(dl) - float(wfmpre.split(';')[14])) * 1.0e1 * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13]) for dl in wfm]
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH3' ).read()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
+            myurl = baseurl + '/?COMMAND=wfmpre?'
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
+            myurl = baseurl + '/?COMMAND=curve?'
             f = urllib.request.urlopen( myurl )
             data = f.read().decode()
             wfm = [float(u) for u in data.split(',')]
-            peak2volt = [1.0e1 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13])) for dl in wfm]
+            peak2volt = [ (float(dl) - float(wfmpre.split(';')[14])) * 1.0e1 * float(wfmpre.split(';')[12]) + float( wfmpre.split(';')[13]) for dl in wfm]
             self.dataToFile[0] = 10.0
             self.dataToFile[1] = 81.9
             self.dataToFile[2] = 1.0
@@ -188,6 +193,8 @@ class grafit(tk.Frame):
                 lasermax = 0.0
             self.dataToFile[8] = round(lasermax,2) #IR
             lasermax = 100.0*max(peak2volt)
+            #print([f'{dd:.4f}' for dd in peak2volt])
+            #print(float(wfmpre.split(';')[12]),float(wfmpre.split(';')[13]),float(wfmpre.split(';')[14]),lasermax)
             if lasermax < 0 :
                 lasermax = 0.0
             self.dataToFile[9] = round(lasermax,2) #UV
@@ -197,6 +204,7 @@ class grafit(tk.Frame):
             self.UVtext.insert( 1.0, str(self.dataToFile[9]) )
             self.plt1.plot(self.t, peak1volt, 'm-')
             self.plt1.plot(self.t, peak2volt, 'c-')
+            self.plt1.grid(True)
             self.maxIR.append( self.dataToFile[8] )
             self.maxUV.append( self.dataToFile[9] )
             self.figure2.axes[0].cla()
@@ -204,32 +212,49 @@ class grafit(tk.Frame):
             self.laserX.append(self.xar[-1])
             self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
             self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
-            self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+            #self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+            self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
             self.plt2.set_ylabel('$\\tau$($\mu$s)')
             self.plt2.set_xlabel('Time (h)')
+            self.plt2.grid(True)
+            try :
+                y_plot_option = self.y_plot_option.get()
+                if y_plot_option == 'Use limits' : 
+                    self.plt2.set_ylim([float(self.y_lowerlimit.get()),float(self.y_upperlimit.get())])
+
+                x_plot_option = self.x_plot_option.get()
+                if x_plot_option == 'Use limits' : 
+                    self.plt2.set_xlim([float(self.x_lowerlimit.get()),float(self.x_upperlimit.get())])
+                if x_plot_option == 'Recent hours' :
+                    self.plt2.set_xlim([self.xar[-1]-float(self.recenthr.get()),self.xar[-1]+0.1])
+            except Exception as exc:
+                print(exc)
             fh = open(self.savePath, 'a') 
             writer = csv.writer(fh)
             writer.writerows([self.dataToFile])
             fh.close()
             self.ctr += 1
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
+            urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH1' ).read()
         else :
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
             urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
-            urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+SAMPLE' ).read() #KDW 2021-1-17 doing this clears the averaging
+            #urllib.request.urlopen( baseurl + '/?COMMAND=ACQUIRE:MODE+AVERAGE' ).read() #and this starts it over from scratch
             urllib.request.urlopen( baseurl + '/?COMMAND=data:source+CH1' ).read()
             data = ''
             myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=curve?'
-            print(myurl)
+            #print(myurl)
             f = urllib.request.urlopen( myurl )
             data = f.read().decode()
-            print('received ' + data)
+            #print('received ' + data)
 
             wfm = [float(u) for u in data.split(',')]
 
             # CALLING WFMPRE TO CONVERT WFM TO MS AND VOLTS
-            myurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c')) + '/?COMMAND=wfmpre?'
-            print(myurl)
+            myurl = baseurl + '/?COMMAND=wfmpre?'
+            #print(myurl)
             f2 = urllib.request.urlopen( myurl )
             wfmpre = f2.read().decode()
 
@@ -247,7 +272,6 @@ class grafit(tk.Frame):
                 self.topHat = np.array(wfm)
 
                 # Waveform to plot
-                print(len(self.topHat), len(self.nontopHat))
                 wvPlot = self.topHat - self.nontopHat
                 wvPlot = [1.0e3 * (((float(dl) - float(wfmpre.split(';')[14]))) * float(wfmpre.split(';')[12]) - float(wfmpre.split(';')[13])) for dl in wvPlot]
                 if self.isStandard :
@@ -274,17 +298,16 @@ class grafit(tk.Frame):
                 cat = b['cat']
                 an = b['an']
                 offst = b['offst'] 
+                print(cat,an,offst)
                 cat_ll = cat + np.fromstring(catrow,dtype=float,sep=' ')[2]
                 cat_ul = cat + np.fromstring(catrow,dtype=float,sep=' ')[4]
                 an_ll = an + np.fromstring(anrow,dtype=float,sep=' ')[2]
                 an_ul = an + np.fromstring(anrow,dtype=float,sep=' ')[4]
-                #print(ci_txt)
-                if an_ul > cat_ll : #unphysical territory
-                    an = an_ll
-                    cat = cat_ul    #force tau to be computed as a lower limit
-                    an_ul = cat
-                    cat_ll = cat
-                print( catrow , anrow , cat, an)
+                an_95CL_ll = an + 2*np.fromstring(anrow,dtype=float,sep=' ')[2]
+                an_95CL_ul = an + 2*np.fromstring(anrow,dtype=float,sep=' ')[4]
+                cat_95CL_ll = cat + 2*np.fromstring(catrow,dtype=float,sep=' ')[2]
+                cat_95CL_ul = cat + 2*np.fromstring(catrow,dtype=float,sep=' ')[4]
+                #print( catrow , anrow , cat, an)
 
                 tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
 
@@ -297,28 +320,40 @@ class grafit(tk.Frame):
                 self.dataToFile[5] = round(float(an),3)
                 self.dataToFile[6] = round(float(offst),3)
                 self.dataToFile[10] = float(result.chisqr/result.nfree) #reduced chisq
-                self.dataToFile[11] = float(0.0)
-                self.dataToFile[12] = float(0.0)
+                numAvgstr = urllib.request.urlopen( baseurl + '/?COMMAND=ACQuire:NUMAVG?' ).read().decode()
+                self.dataToFile[11] = float(numAvgstr) #TODO: number in average
+                nTrigstr = urllib.request.urlopen( baseurl + '/?COMMAND=ACQuire:NUMACQ?' ).read().decode()
+                self.dataToFile[12] = float(nTrigstr) #TODO: number of triggers
 
                 self.xar.append((time.time() - self.start_time) / 3600)
                 ts = self.xar[-1]*3600.0 + self.start_time  
                 self.dataToFile[7] = str( ts + 126144000.0 + 2208988800.0 )
                 tau_e = (81.9 - 10.0) / np.log( cat / an )
-                print('cat and an', self.dataToFile[4], self.dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
-                self.yar.append(tau_e)
-
                 upper_bound = (81.9 - 10.0) / np.log( cat_ll / an_ul )
                 lower_bound = (81.9 - 10.0) / np.log( cat_ul / an_ll )
+                errorl = tau_e - lower_bound
+                errorh = upper_bound - tau_e
+                if tau_e < 0 : #unphysical lifetime
+                    print('!!!! Uphysical lifetime !!!')
+                    a = an
+                    delta_a = an - an_ll
+                    tau_lower_limit = (81.9-10.0)/np.log((a+2*delta_a)/a)
+                    delta_tau_h = (81.9 - 10.0) / np.log( cat_ll / an_ul ) - tau_e 
+                    number_of_sigma = (tau_lower_limit-tau_e)/errorh #approximate number of sigma
+                    errorl = 0.0
+                    errorh = np.inf 
+                    tau_e = tau_lower_limit
+                    print(errorl, errorh, tau_lower_limit , tau_e, number_of_sigma)
+                print('cat and an', self.dataToFile[4], self.dataToFile[5], offst,tau_e,cat-b['cat'],an-b['an'],offst-b['offst'])
+                self.yar.append(tau_e)
 
                 # we are appending the data to the row which will be written to the file
                 self.dataToFile[13] = float(cat_ll) 
                 self.dataToFile[14] = float(cat_ul)
                 self.dataToFile[15] = float(an_ll)
                 self.dataToFile[16] = float(an_ul)
-
-                self.el.append(tau_e - lower_bound)
-                self.eh.append(upper_bound - tau_e)
-
+                self.el.append(errorl)
+                self.eh.append(errorh)
                 self.figure1.axes[0].cla()
 
                 # PLOTTTING PEAKS:
@@ -326,7 +361,7 @@ class grafit(tk.Frame):
                 # PLOTTING WAVEFORM:
                 # self.plt.subplot(212)
                 self.plt1.plot(self.t, wvPlot, 'g-')
-
+                self.plt1.grid(True) 
                 tfine = np.arange(self.t[0], self.t[-1] + 0.8, (self.t[1] - self.t[0]) / 10.0)
             
                 if self.isStandard :
@@ -340,8 +375,9 @@ class grafit(tk.Frame):
                     #               tarise=b['tarise'], cent_a=b['cent_a'], gam_a=b['gam_a'],
                     #               gam_c=b['gam_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='proposed: an=42.04 mV')
                     self.plt1.plot(tfine, self.wavmodel.eval(x=tfine, cat=cat, an=an, sig_c=b['sig_c'], gam_c=b['gam_c'], sig_a=b['sig_a'], skew_c=b['skew_c'], skew_a=b['skew_a'], offst=b['offst']), 'r-', label='new voigt')
+                    self.plt1.grid(True)
 
-                #self.canvas2.draw_idle()
+                #self.canvas2draw_idle()
 
                 #Statistics labels Updates 
                 # optional TODO: if anyone ever updates these fields with that wrapper, do it with these functions too
@@ -353,9 +389,17 @@ class grafit(tk.Frame):
 
                 self.lifetimeLabel.config(state='normal')
                 self.lifetimeLabel.delete(1.0, tk.END)
-                self.lifetimeLabel.insert(1.0,str(round((81.9 - 10.0) / np.log( dataToFile[4] / dataToFile[5] ),1)) )
+                self.lifetimeLabel.insert(1.0,str(round((81.9 - 10.0) / np.log( self.dataToFile[4] / self.dataToFile[5] ),1)) )
                 self.lifeErrorsTxt.delete(1.0, tk.END)
-                self.lifeErrorsTxt.insert(1.0,'+'+str(round((upper_bound-tau_e),3))+'\n'+str(round((lower_bound-tau_e),3)))
+                try: 
+                    uppererrorbar = errorh
+                    lowererrorbar = errorl
+                    asymerrorboundstr = '+' + '%1.3E' % Decimal(uppererrorbar) + '\n'
+                    asymerrorboundstr = asymerrorboundstr + '-' + '%1.3E' % Decimal(lowererrorbar) 
+                    self.lifeErrorsTxt.insert(1.0,asymerrorboundstr)
+                except Exception as exc:
+                    print(exc)
+                print(tau_e,lower_bound,upper_bound)
                 #('+'++'-'+str(tau_e-lower_bound)
                 self.lifetimeLabel.tag_add('rightjust',1.0,tk.END)
                 self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
@@ -379,9 +423,12 @@ class grafit(tk.Frame):
                 self.plt1.set_title("Most recent waveform")
                 self.plt1.set_ylabel("MilliVolts")
                 self.plt1.set_xlabel(u"Time (\u03bcs)")
+                urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:trigger:position+30' ).read()
+                urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-9' ).read()
             else:
                 self.nontopHat = np.array(wfm)
-
+            
+        print('drawing idle')
         self.canvas1.draw_idle()
         self.canvas2.draw_idle()
         # here we check if the save file has been defined, if so write to it, if not state that it is not set
@@ -406,7 +453,9 @@ class grafit(tk.Frame):
                 ct = int((schedule.queue[0].time - time.time())*100)
                 #print(ct)
             if len( schedule.queue[0].argument[0] ) > 1 and ct > 0 :    
+                #print('schedule length',len(schedule.queue))
                 #print(schedule.queue[0].argument[0]+str(ct/100)+' sec')
+                    
                 # Current State update, works exactly identical to the rest of the label updates in plotit()
                 self.currentStatus.config(state='normal')
                 self.currentStatus.delete(1.0,tk.END)
@@ -422,11 +471,31 @@ class grafit(tk.Frame):
             if len( schedule.queue ) == 0 :
                 print('Schedule is depopulated')
         except Exception as exc:
-            for event in schedule.queue :
-                schedule.cancel(event)
-            self.saveFile.close()
+            pass
+            #print(exc)
+            #for event in schedule.queue :
+            #    schedule.cancel(event)
+            #self.saveFile.close()
             #openshutter('',0.0)
             #os._exit(0)
+        try :
+            y_plot_option = self.y_plot_option.get()
+            if y_plot_option == 'Use limits' : 
+                self.plt2.set_ylim([float(self.y_lowerlimit.get()),float(self.y_upperlimit.get())])
+            else :
+                self.plt2.autoscale(enable=True, axis='y')
+
+            x_plot_option = self.x_plot_option.get()
+            if x_plot_option == 'Use limits' : 
+                self.plt2.set_xlim([float(self.x_lowerlimit.get()),float(self.x_upperlimit.get())])
+            elif x_plot_option == 'Recent hours' :
+                self.plt2.set_xlim([self.xar[-1]-float(self.x_recenthr.get()),self.xar[-1]+0.1])
+            else :
+                self.plt2.autoscale(enable=True, axis='x')
+            
+            self.canvas2.draw_idle()
+        except Exception as exc:
+            print(exc)
         self.parent.after(1000,self.ud)
 
     def on_closing(self):
@@ -436,6 +505,8 @@ class grafit(tk.Frame):
             print("File closed")
             self.saveFile.close()
             openshutter('',0.0)
+            baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
+            urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
         except Exception as exc:
             return
             #os._exit(0)
@@ -465,9 +536,20 @@ class grafit(tk.Frame):
         print("File closed")
         self.saveFile.close()
         self.ctr = 0
+        self.xar = []
+        self.yar = []
+        self.el = []
+        self.eh = []
+        self.maxIR = []
+        self.maxUV = []
+        self.laserX = []
+        self.dataToFile = np.zeros(17)
+        self.t = []
 
         self.scheduThread = threading.Thread(target=startSchedule)
         self.scheduThread.daemon = True
+        baseurl = 'http://' + str(self.scopeIPText.get('1.0','end-1c'))
+        urllib.request.urlopen( baseurl + '/?COMMAND=horizontal:main:scale+40e-6' ).read()
 
         in_progress = False
 
@@ -533,60 +615,63 @@ class grafit(tk.Frame):
         #print("Self.control...")
         try :
             global total
+            global fibersavetime
             dwellclosed = 32.0 ### 32.0
             dwellopen = float(self.waitT_input.get())
             fibersavetime = float(self.fibersavesb.get())  #for fibersave
             tbc = dwellclosed
             tf = 0 
-            if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 7  and root.graph.ctr > 0 ) :
+            if ( len( schedule.queue ) == 0 and in_progress == True ) or ( len(schedule.queue) == 6  and root.graph.ctr > 0 ) :
                 print( 'length of queue',len( schedule.queue ) )
                 for iii in range(0,10) :
-                    iodelay = 12
                     text = '*Initializing acquisition ---SHUTTER CLOSED--- '
                     #print(text)
                     if isfibersave and root.graph.ctr > 0 and iii == 0 : 
                         text = '*Fiber-saving mode: ---SHUTTER CLOSED--- resume in '
-                    schedule.enter( total, 1, closeshutter, argument=(text,1.0) ) 
+                    schedule.enter( total, 1, closeshutter, argument=(text,5.0) ) 
                     text = '*Acquisition mode ---SHUTTER CLOSED--- capture background trace in '
                     #if isfibersave and root.graph.ctr > 0 :
                     #  text = '*Fiber-saving mode: ---SHUTTER CLOSED--- next acquisition in '
-                    total = total + 1 + dwellclosed
-                    schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellclosed) )
-                    #total = total + iodelay
-                    total = total + 1 
+                    total = total + 5 + dwellclosed
+                    schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellclosed+5) )
+                    total = total + 5 
                     text = '*Capturing (signal+background) ---OPENING SHUTTER--- '
-                    schedule.enter( total, 1, openshutter, argument=(text,1.0) )
+                    schedule.enter( total, 1, openshutter, argument=(text,5.0) )
                     text = 'Acquisition mode ---SHUTTER OPEN--- capture (signal+background) in '
                     total = total + dwellopen 
                     schedule.enter( total, 1, root.graph.plotit, argument=(text,dwellopen))
                     #text = 'Acquisition mode ---SHUTTER OPEN--- capturing laser traces '
-                    total = total + 32 
-                    schedule.enter( total, 1, root.graph.plotit , argument = ('Getting IR, UV Laser traces ',32.0,True) )
+                    total = total + 32 + 5
+                    schedule.enter( total, 1, root.graph.plotit , argument = ('Getting IR, UV Laser traces in ',32.0,True) )
                     #total = total + 1 
                     #schedule.enter( total, 1, root.graph.plotit , argument = ('Getting UV Laser trace ',1.0,True) )
                     if isfibersave and iii == 9 : 
                         text = '*Fiber-saving mode: ---CLOSING SHUTTER--- '
                         #print(text)
-                        total = total + 1 
-                        schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
+                        total = total + 5 
+                        fibersavetime = float(self.fibersavesb.get())  #for fibersave
+                        schedule.enter( total, 1, closeshutter, argument=(text,5.0) )
                         total = total + fibersavetime
                     else : 
-                        total = total + 1 
+                        total = total + 5
                         text = '*Acquisition mode ---CLOSING SHUTTER--- preparing next acquisition '
-                        schedule.enter( total, 1, closeshutter, argument=(text,1.0) )
+                        schedule.enter( total, 1, closeshutter, argument=(text,5.0) )
                         total = total + tbc 
                 #print('schedule has '+str( len(schedule.queue) ))
                 if isfibersave : 
+                    fibersavetime = float(self.fibersavesb.get())  #for fibersave
                     total = fibersavetime
                 else :
                     total = tbc
+                #print(schedule.queue)
         except Exception as exc :
+            print(exc)
             for event in schedule.queue :
                 print( event )
                 schedule.cancel(event)
             self.saveFile.close()
             #os._exit(0)
-        self.parent.after(10, self.control) 
+        self.parent.after(5, self.control) 
 
     def set_saveFile(self):
         global in_progress
@@ -636,25 +721,41 @@ class grafit(tk.Frame):
                     ts = linearr[7] - (126144000.0 + 2208988800.0)
                     self.xar.append( (ts - newtime) / 3600)
                     tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
-                    self.yar.append(tau_e)
                     upper_bound = -(81.9 - 10.0) / np.log(linearr[16] / linearr[13])
                     lower_bound = -(81.9 - 10.0) / np.log(linearr[15] / linearr[14])
-                    self.el.append(tau_e - lower_bound)
-                    self.eh.append(upper_bound - tau_e)
+                    errorl = tau_e - lower_bound
+                    errorh = upper_bound - tau_e
+                    
+                    if tau_e < 0 : #unphysical lifetime
+                        a = linearr[4]
+                        delta_a = linearr[5] - linearr[14]
+                        tau_lower_limit = (81.9-10.0)/np.log((a+delta_a)/a)
+                        number_of_sigma = (tau_lower_limit-tau_e)/errorh #approximate number of sigma
+                        print(tau_lower_limit , number_of_sigma)
+                        errorl = 0.0
+                        errorh = self.plt2.get_ylim()[1] - tau_lower_limit
+                        tau_e = tau_lower_limit
+
+                    self.yar.append(tau_e)
+                    self.el.append(errorl)
+                    self.eh.append(errorh)
                     self.maxIR.append( linearr[8] )
                     self.maxUV.append( linearr[9] )
                     self.figure2.axes[0].cla()
                     self.figure1.axes[0].cla()
                     self.plt2.errorbar(self.xar, self.yar, [self.el, self.eh], markersize=6, fmt='^',mec='r',mfc='None')
+                    #self.plt2.set_ylim([self.plt2.get_ylim()[0],])
                     self.laserX.append(self.xar[-1])
                     self.plt2.plot(self.laserX, self.maxIR, 'mo', fillstyle='none')
                     self.plt2.plot(self.laserX, self.maxUV, 'co', fillstyle='none')
                     self.plt1.set_title("Most recent waveform")
                     self.plt1.set_ylabel("MilliVolts")
                     self.plt1.set_xlabel(u"Time (\u03bcs)")
-                    self.plt2.set_title("$e^{-}$ Lifetime vs Time")
-                    self.plt2.set_ylabel('$\\tau$($\mu$s)')
+                    self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
+                    self.plt2.set_ylabel('')#$\\tau$($\mu$s)')
                     self.plt2.set_xlabel('Time (h)')
+                    self.plt1.grid(True)
+                    self.plt2.grid(True)
                     self.canvas1.draw_idle()
                     self.canvas2.draw_idle()
                 self.start_time = newtime # extending the time backwards to accomodate old data so graph renders correctly 
@@ -686,7 +787,8 @@ class grafit(tk.Frame):
                 self.plt1.set_title("Most recent waveform")
                 self.plt1.set_ylabel("MilliVolts")
                 self.plt1.set_xlabel(u"Time (\u03bcs)")
-                self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+                #self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+                self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
                 self.plt2.set_ylabel('$\\tau$($\mu$s)')
                 self.plt2.set_xlabel('Time (h)')
                 self.canvas1.draw_idle()
@@ -696,6 +798,7 @@ class grafit(tk.Frame):
                         self.scheduThread.start()
             else:
                 # cancel. go back to the start screen to enter a new file and try again
+                in_progress = False
                 return
         
         else:  
@@ -708,6 +811,9 @@ class grafit(tk.Frame):
             if self.ctr == 0 :
                 if self.scheduThread.is_alive() == False :
                     self.scheduThread.start()
+            self.figure2.axes[0].cla()
+            self.canvas2.draw_idle()
+            self.ctr = 0
         in_progress = True
 
 
@@ -862,20 +968,87 @@ class grafit(tk.Frame):
 
         # positioning of the graphs
         self.figure1 = Figure(figsize=(5, 4), dpi=100)
-        self.figure2 = Figure(figsize=(5, 4), dpi=100)
+        self.figure2 = Figure(figsize=(6, 4), dpi=100)
 
         self.plt1 = self.figure1.add_subplot(111)
         self.plt1.set_title("Most recent waveform")
         self.plt1.set_ylabel("MilliVolts")
         self.plt1.set_xlabel(u"Time (\u03bcs)")
+        self.plt1.grid(True)
         #self.figure1.tight_layout()
 
         self.plt2 = self.figure2.add_subplot(111)
-        self.plt2.set_title("$e^{-}$ Lifetime vs Time")
+        self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
+        #self.plt2.set_title("$e^{-}$ Lifetime vs Time")
         self.plt2.set_ylabel('$\\tau$($\mu$s)')
         self.plt2.set_xlabel('Time (h)')
-        #self.figure2.tight_layout()
+        self.plt2.grid(True)
 
+        self.y_plotLabel = tk.Label(height=1,width=14)
+        self.y_plotLabel.config(text='Y-axis config',font='Helvetica 12 bold')
+        self.y_plotLabel.config(bg=parent['background'])
+        self.y_plotLabel.grid(row=65, column=17,sticky=tk.E)
+        self.y_plot_option = tk.StringVar(master=self.parent)
+        self.y_plot_option.set('Autoscale')
+        self.y_pd_menu = tk.OptionMenu(self.parent,self.y_plot_option,'Autoscale','Use limits')
+        self.y_pd_menu.grid(row=65, column=18,rowspan=3,sticky=tk.N)
+        self.y_upperlimitstr = tk.StringVar(self.parent)
+        self.y_upperlimitstr.set('100000.0')  ### 33.0
+        self.y_upperlimit = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = -1.0e99 , to = +1.0e99 , textvariable = self.y_upperlimitstr,width=14)
+        self.y_upperlimit.grid(row=65, column=19,sticky=tk.W)
+        self.y_upperlimitLabel = tk.Label(height=1,width=15)
+        self.y_upperlimitLabel.config(text='upper limit [us]')
+        self.y_upperlimitLabel.config(bg=parent['background'])
+        self.y_upperlimitLabel.grid(row=65,column=19,sticky=tk.E)
+
+        self.y_lowerlimitstr = tk.StringVar(self.parent)
+        self.y_lowerlimitstr.set('100.0')  ### 33.0
+        self.y_lowerlimit = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = -1.0e99 , to = +1.0e99 , textvariable = self.y_lowerlimitstr,width=14)
+        self.y_lowerlimit.grid(row=66, column=19,sticky=tk.W)
+        self.y_lowerlimitLabel = tk.Label(height=1,width=15)
+        self.y_lowerlimitLabel.config(text='lower limit [us]')
+        self.y_lowerlimitLabel.config(bg=parent['background'])
+        self.y_lowerlimitLabel.grid(row=66,column=19,sticky=tk.E)
+        self.midrightdummyspacer = tk.Label(height=1)
+
+        self.midrightdummyspacer.config(text=' ',bg=parent['background'])
+        self.midrightdummyspacer.grid(row=67,column=19)
+        
+        self.x_plotLabel = tk.Label(height=1,width=14)
+        self.x_plotLabel.config(text='X-axis config',font='Helvetica 12 bold')
+        self.x_plotLabel.config(bg=parent['background'])
+        self.x_plotLabel.grid(row=68, column=17,sticky=tk.E)
+        self.x_plot_option = tk.StringVar(master=self.parent)
+        self.x_plot_option.set('Autoscale')
+        self.x_pd_menu = tk.OptionMenu(self.parent,self.x_plot_option,'Autoscale','Use limits','Recent hours')
+        self.x_pd_menu.grid(row=68, column=18,rowspan=3,sticky=tk.N)
+        self.x_upperlimitstr = tk.StringVar(self.parent)
+        self.x_upperlimitstr.set('10.0')  ### 33.0
+        self.x_upperlimit = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = -1.0e99 , to = +1.0e99 , textvariable = self.x_upperlimitstr,width=14)
+        self.x_upperlimit.grid(row=68, column=19,sticky=tk.W)
+        self.x_upperlimitLabel = tk.Label(height=1,width=15)
+        self.x_upperlimitLabel.config(text='upper limit [h]')
+        self.x_upperlimitLabel.config(bg=parent['background'])
+        self.x_upperlimitLabel.grid(row=68,column=19,sticky=tk.E)
+
+        self.x_lowerlimitstr = tk.StringVar(self.parent)
+        self.x_lowerlimitstr.set('0.0')  ### 33.0
+        self.x_lowerlimit = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = -1.0e99 , to = +1.0e99 , textvariable = self.x_lowerlimitstr,width=14)
+        self.x_lowerlimit.grid(row=69, column=19,sticky=tk.W)
+        self.x_lowerlimitLabel = tk.Label(height=1,width=15)
+        self.x_lowerlimitLabel.config(text='lower limit [h]')
+        self.x_lowerlimitLabel.config(bg=parent['background'])
+        self.x_lowerlimitLabel.grid(row=69,column=19,sticky=tk.E)
+
+        self.x_recenthrstr = tk.StringVar(self.parent)
+        self.x_recenthrstr.set('1.0')  ### 33.0
+        self.x_recenthr = tk.Spinbox(self.parent, increment=1.0, foreground='black', background='white', from_ = -1.0e99 , to = +1.0e99 , textvariable = self.x_recenthrstr,width=14)
+        self.x_recenthr.grid(row=70, column=19,sticky=tk.W)
+        self.x_recenthrLabel = tk.Label(height=1,width=15)
+        self.x_recenthrLabel.config(text='recent hours [h]')
+        self.x_recenthrLabel.config(bg=parent['background'])
+        self.x_recenthrLabel.grid(row=70,column=19,sticky=tk.E)
+        
         self.canvas1 = FigureCanvasTkAgg(self.figure1, master=self.parent)
         self.canvas2 = FigureCanvasTkAgg(self.figure2, master=self.parent)
         # self.graph = Graph(self)
@@ -889,21 +1062,29 @@ class grafit(tk.Frame):
         # Lower Labels Field
         # Optional TODO: might be better if these text fields are made into their own class, since right now they all function basically
         # identically and there's a lot of repeated lines, both here and in plotit/ud 
+
+        self.dummyspacerright = tk.Label(height=1,width=1)
+        self.dummyspacerright.config(text=' ')
+        self.dummyspacerright.config(bg=parent['background'])
+        self.dummyspacerright.grid(row=71,column=27)
         
         self.currentStatus = tk.Text(height=1, width=78, bg='white',fg='#CF9FFF', wrap='none')  # current status is displayed
         self.currentStatus.insert(tk.END,'CURRENT STATUS TO BE DISPLAYED')
         self.currentStatus.config(state='disabled')
-        self.currentStatus.grid( row=71, column=16, columnspan=10)
+        self.currentStatus.grid( row=72, column=16, columnspan=5)
         
         self.fibersaveval = tk.IntVar(value=1)
         self.fibersavecheck = tk.Checkbutton( text ='Fiber-saving mode' , command = self.togglefibersave, variable=self.fibersaveval, onvalue=1, offvalue=0)
-        self.fibersavecheck.grid( row = 73, column = 16 )
+        self.fibersavecheck.config(bg=parent['background'])
+        self.fibersavecheck.grid( row = 74, column = 17 )
         self.fstimestr = tk.StringVar(value='10800.0')
         self.fibersavesb = tk.Spinbox( self.parent , width = 34 , increment=1.0 , foreground='black', background='white', from_ = 33.0 , to = 259200.0 , textvariable = self.fstimestr )
-        self.fibersavesb.grid( row = 73, column = 19 , sticky = tk.W )
+        self.fibersavesb.grid( row = 74, column = 19 , sticky = tk.W )
+        global fibersavetime
+        fibersavetime = float(self.fibersavesb.get())  #for fibersave
         self.fibersavelabel = tk.Label(height=1,width=24)
-        self.fibersavelabel.config(text='Closed-shutter time [s]')
-        self.fibersavelabel.grid(row=73,column=17, sticky=tk.E)
+        self.fibersavelabel.config(text='Closed-shutter time [s]',bg=parent['background'])
+        self.fibersavelabel.grid(row=74,column=18, sticky=tk.E)
 
         self.dummyspacer8 = tk.Label(height=1,width=1)
         self.dummyspacer8.config(text=' ')
@@ -974,7 +1155,7 @@ class grafit(tk.Frame):
         self.lifetimeLabel.tag_config('rightjust',justify=tk.RIGHT)
         self.lifetimeLabel.config(state='disabled')
         self.lifetimeLabel.grid(row=65, column=8,sticky=tk.E)
-        self.lifeErrorsTxt = tk.Text(height=2, width=8, font=Font(size=6))  
+        self.lifeErrorsTxt = tk.Text(height=2, width=12, font=Font(size=6))  
         self.lifeErrorsTxt.insert(1.0,'0.000\n0.000')
         self.lifeErrorsTxt.grid(row=65,column=9,sticky=tk.W)
         
