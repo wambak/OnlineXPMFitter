@@ -444,7 +444,7 @@ class grafit(tk.Frame):
     def ud(self) :
         try :
             #print('schedule length',len(schedule.queue))
-            if in_progress == False and total > 0 :
+            if in_progress == False : #and total > 0 :
                 self.currentStatus.config(state='normal')
                 self.currentStatus.delete(1.0,tk.END)
                 self.currentStatus.insert(1.0,'Ending the run')
@@ -717,8 +717,8 @@ class grafit(tk.Frame):
                         # line[7] is ts (time (seconds)) 
                         # line[13] - line[16] are cat_ll, cat_ul, an_ll, an_ul
                     if count == 1:
-                        newtime = linearr[7] - (126144000.0 + 2208988800.0) # start time of the existing file data in Unix time
-                    ts = linearr[7] - (126144000.0 + 2208988800.0)
+                        newtime = linearr[7] - (126144000+2208988800) # start time of the existing file data in Unix time
+                    ts = linearr[7] - (126144000+2208988800)
                     self.xar.append( (ts - newtime) / 3600)
                     tau_e = (81.9 - 10.0) / np.log(linearr[4] / linearr[5])
                     upper_bound = -(81.9 - 10.0) / np.log(linearr[16] / linearr[13])
@@ -766,13 +766,18 @@ class grafit(tk.Frame):
                 self.startTime.config(state='disabled')
                 if self.scheduThread.is_alive() == False :
                     self.scheduThread.start()
-            if state == 'overwrite':
+            elif state == 'overwrite':
                 if self.ctr == 0 :
                     if self.scheduThread.is_alive() == False :
                         self.control() 
 
                 print("Opening in overwrite mode")
                 self.saveFile = open(r'%s' % (self.savePath), "w+")  # deletes and overwrites old data
+                self.start_time = time.time()
+                self.startTime.config(state='normal')
+                self.startTime.delete(1.0, tk.END)
+                self.startTime.insert('1.0',time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(self.start_time)))
+                self.startTime.config(state='disabled')
                 self.xar = []
                 self.yar = []
                 self.el = []
@@ -791,6 +796,8 @@ class grafit(tk.Frame):
                 self.plt2.set_title("$e^{-}$ Lifetime [$\mu$s] vs Time")
                 self.plt2.set_ylabel('$\\tau$($\mu$s)')
                 self.plt2.set_xlabel('Time (h)')
+                self.plt1.grid()
+                self.plt2.grid()
                 self.canvas1.draw_idle()
                 self.canvas2.draw_idle()
                 if self.ctr == 0 :
@@ -811,9 +818,16 @@ class grafit(tk.Frame):
             if self.ctr == 0 :
                 if self.scheduThread.is_alive() == False :
                     self.scheduThread.start()
+            self.plt1.grid()
+            self.plt2.grid()
             self.figure2.axes[0].cla()
             self.canvas2.draw_idle()
             self.ctr = 0
+            self.start_time = time.time()
+            self.startTime.config(state='normal')
+            self.startTime.delete(1.0, tk.END)
+            self.startTime.insert('1.0',time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(self.start_time)))
+            self.startTime.config(state='disabled')
         in_progress = True
 
 
@@ -1058,6 +1072,9 @@ class grafit(tk.Frame):
 
         self.plot_widget1.grid(row=1, rowspan=64, column=5, columnspan=8)
         self.plot_widget2.grid(row=1, rowspan=64, column=14, columnspan=8)
+
+        self.canvas1.draw_idle()
+        self.canvas2.draw_idle()
 
         # Lower Labels Field
         # Optional TODO: might be better if these text fields are made into their own class, since right now they all function basically
