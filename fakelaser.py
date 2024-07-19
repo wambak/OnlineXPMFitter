@@ -23,7 +23,7 @@ elif sys.platform.startswith("darwin"):
 else:
     dwf = cdll.LoadLibrary("libdwf.so")
 
-lifetime = 125.0
+lifetime = 940.0
 
 
 def biGaus_skew(x,cat,sig_c,tau_c,sig_a,tau_a) :
